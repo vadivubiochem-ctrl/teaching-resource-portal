@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Teacher Resource Hub",
+  "short_name": "TeacherHub",
+  "description": "A centralized teaching resource cloud platform for teachers to organize, access, and preview resources even when offline.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
