@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { User, TeachingFile, Folder as FolderType, SystemStats } from './types.js';
 import { api, getSimulatedDevice, setSimulatedDevice } from './services/api.js';
+import { LocalStore } from './services/store.js';
 import { AuthPage } from './components/AuthPage.js';
 import { Navbar } from './components/Navbar.js';
 import { Sidebar } from './components/Sidebar.js';
@@ -40,10 +41,11 @@ import { downloadTeachingFile } from './utils/fileDownloader.js';
 import { useOnlineStatus } from './utils/useOnlineStatus.js';
 import { usePWAInstall } from './utils/usePWAInstall.js';
 import { cacheFileMetadata, getCachedFiles } from './services/offlineStorage.js';
+import { syncManager } from './utils/syncManager.js';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [loadingAuth, setLoadingAuth] = useState(false);
 
   // App navigation state
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -92,25 +94,18 @@ export default function App() {
     }, 3500);
   };
 
-  // Auth bootstrap
+  // Auth bootstrap: Always show main login panel when running the project
   useEffect(() => {
-    api
-      .getMe()
-      .then((res) => {
-        setCurrentUser(res.user);
-      })
-      .catch(() => {
-        setCurrentUser(null);
-      })
-      .finally(() => {
-        setLoadingAuth(false);
-      });
+    LocalStore.clearSession();
+    setCurrentUser(null);
+    setLoadingAuth(false);
   }, []);
 
   // Fetch Repository Data with IndexedDB caching
   const loadRepositoryData = useCallback(async () => {
     if (!currentUser) return;
     setLoadingData(true);
+    syncManager.setSyncing(true);
     try {
       const [filesRes, foldersRes, statsRes] = await Promise.all([
         api.getFiles({
@@ -138,6 +133,10 @@ export default function App() {
       }
     } finally {
       setLoadingData(false);
+      // Give a brief smooth moment before switching back to 'Cloud Updated'
+      setTimeout(() => {
+        syncManager.setSyncing(false);
+      }, 400);
     }
   }, [currentUser, searchQuery, activeTab]);
 
@@ -145,6 +144,19 @@ export default function App() {
     if (currentUser) {
       loadRepositoryData();
     }
+  }, [currentUser, loadRepositoryData]);
+
+  // Listen for 'file-updated' BroadcastChannel events across all open browser windows/tabs
+  useEffect(() => {
+    const unsubscribe = syncManager.subscribe((msg) => {
+      console.log('[syncManager] Received event from another window/tab:', msg.event);
+      if (currentUser) {
+        loadRepositoryData();
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
   }, [currentUser, loadRepositoryData]);
 
   // Storage Quota Monitoring: Detect when user's storage exceeds 90%
@@ -210,6 +222,7 @@ export default function App() {
     try {
       await api.updateFile(file.id, { is_favorite: newFav });
       showToast(newFav ? 'Added to favorites' : 'Removed from favorites', 'info');
+      syncManager.emit('file-updated', { fileId: file.id, type: 'favorite' });
     } catch (err) {
       loadRepositoryData();
     }
@@ -229,6 +242,7 @@ export default function App() {
       await api.updateFile(renameModalFile.id, { file_name: renameValue.trim() });
       showToast(`Renamed to "${renameValue.trim()}"`, 'success');
       setRenameModalFile(null);
+      syncManager.emit('file-updated', { fileId: renameModalFile.id, type: 'rename' });
       loadRepositoryData();
     } catch (err: any) {
       showToast(err.message || 'Failed to rename', 'error');
@@ -250,6 +264,7 @@ export default function App() {
       await api.updateFile(moveModalFile.id, { folder_id: targetFolder as any });
       showToast(`Resource moved successfully`, 'success');
       setMoveModalFile(null);
+      syncManager.emit('file-updated', { fileId: moveModalFile.id, type: 'move' });
       loadRepositoryData();
     } catch (err: any) {
       showToast(err.message || 'Failed to move', 'error');
@@ -261,6 +276,7 @@ export default function App() {
     try {
       const res = await api.copyFile(file.id);
       showToast(`Created copy: ${res.file.file_name}`, 'success');
+      syncManager.emit('file-updated', { fileId: res.file.id, type: 'copy' });
       loadRepositoryData();
     } catch (err: any) {
       showToast(err.message || 'Failed to copy', 'error');
@@ -277,6 +293,7 @@ export default function App() {
       await api.deleteFile(file.id, permanent);
       showToast(permanent ? 'File permanently deleted' : 'Moved to Trash', 'info');
       if (previewFile?.id === file.id) setPreviewFile(null);
+      syncManager.emit('file-updated', { fileId: file.id, type: 'delete' });
       loadRepositoryData();
     } catch (err: any) {
       showToast(err.message || 'Failed to delete file', 'error');
@@ -300,6 +317,7 @@ export default function App() {
         'success'
       );
       if (previewFile && ids.includes(previewFile.id)) setPreviewFile(null);
+      syncManager.emit('file-updated', { fileIds: ids, type: 'batch-delete' });
       loadRepositoryData();
     } catch (err: any) {
       showToast(err.message || 'Batch delete failed', 'error');
@@ -312,6 +330,7 @@ export default function App() {
       const ids = selectedFiles.map((f) => f.id);
       await api.batchMoveFiles(ids, targetFolderId);
       showToast(`Successfully moved ${selectedFiles.length} file(s)`, 'success');
+      syncManager.emit('file-updated', { fileIds: ids, type: 'batch-move' });
       loadRepositoryData();
     } catch (err: any) {
       showToast(err.message || 'Batch move failed', 'error');
@@ -740,6 +759,7 @@ export default function App() {
         initialFolderId={currentFolderId}
         onUploadSuccess={(newFiles) => {
           showToast(`Successfully uploaded ${newFiles.length} file(s)!`, 'success');
+          syncManager.emit('file-updated', { count: newFiles.length, type: 'upload' });
           loadRepositoryData();
         }}
       />

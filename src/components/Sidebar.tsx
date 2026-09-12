@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Home,
   FolderOpen,
@@ -21,9 +21,13 @@ import {
   Sparkles,
   History,
   AlertTriangle,
+  CheckCircle2,
+  RefreshCw,
+  Cloud,
 } from 'lucide-react';
 import type { User } from '../types.js';
 import { formatBytes } from '../utils/formatters.js';
+import { syncManager, type SyncBroadcastMessage } from '../utils/syncManager.js';
 
 export type NavTab =
   | 'dashboard'
@@ -84,6 +88,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleClose = onCloseMobile || onClose;
   const handleUpload = onOpenUploadModal || onOpenUpload;
 
+  // Visual Sync-Status Indicator: listens to syncManager's activity
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+
+  useEffect(() => {
+    // Subscribe to status updates ('Syncing...' vs idle)
+    const unsubStatus = syncManager.subscribeStatus((syncing) => {
+      setIsSyncing(syncing);
+      if (!syncing) {
+        setLastSyncTime(new Date());
+      }
+    });
+
+    // Also listen to incoming sync events from other windows/tabs
+    const unsubEvents = syncManager.subscribe((msg: SyncBroadcastMessage) => {
+      setIsSyncing(true);
+      const timer = setTimeout(() => {
+        setIsSyncing(false);
+        setLastSyncTime(new Date());
+      }, 1000);
+      return () => clearTimeout(timer);
+    });
+
+    return () => {
+      unsubStatus();
+      unsubEvents();
+    };
+  }, []);
+
   const mainNavItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'my-resources', label: 'My Resources', icon: FolderOpen },
@@ -130,7 +163,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         <div className="flex flex-col h-full overflow-y-auto px-3 py-4 space-y-5">
           {/* Quick Upload Primary CTA */}
-          <div className="px-1">
+          <div className="px-1 space-y-2.5">
             <button
               type="button"
               id="sidebar-upload-btn"
@@ -143,6 +176,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Upload className="w-4 h-4" />
               <span>Upload Resource</span>
             </button>
+
+            {/* Visual Sync-Status Indicator listening to syncManager's activity */}
+            <div
+              id="sidebar-sync-status-indicator"
+              className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs border transition-all duration-300 ${
+                isSyncing
+                  ? 'bg-amber-950/30 border-amber-500/40 text-amber-200'
+                  : 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+              }`}
+              title={
+                isSyncing
+                  ? 'Synchronizing repository changes across tabs and cloud...'
+                  : `All repository files and folders are fresh (Last synced: ${lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})`
+              }
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                {isSyncing ? (
+                  <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                )}
+                <span className="font-medium truncate">
+                  {isSyncing ? 'Syncing...' : 'Cloud Updated'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 pl-1">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isSyncing ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'
+                  }`}
+                />
+                <Cloud className={`w-3.5 h-3.5 ${isSyncing ? 'text-amber-400' : 'text-emerald-400/80'}`} />
+              </div>
+            </div>
           </div>
 
           {/* Main Navigation */}

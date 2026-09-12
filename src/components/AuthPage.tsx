@@ -14,6 +14,8 @@ import {
   ArrowRight,
   UserPlus,
   Scale,
+  Key,
+  ShieldCheck,
 } from 'lucide-react';
 import { api, getSimulatedDevice, setSimulatedDevice } from '../services/api.js';
 import { LocalStore } from '../services/store.js';
@@ -30,7 +32,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
   // Login form state
-  const [identifier, setIdentifier] = useState('vadivubichem@gmail.com');
+  const [identifier, setIdentifier] = useState('pssofttech@gmail.com');
   const [password, setPassword] = useState('password123');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -172,24 +174,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
 
       {/* Top Header */}
-      <div className="max-w-md w-full mx-auto relative z-10 mb-6 flex flex-col items-center text-center">
+      <div className="max-w-xl w-full mx-auto relative z-10 mb-6 flex flex-col items-center text-center">
         <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/25 mb-3">
           <GraduationCap className="w-8 h-8" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
           Teacher Resource Hub
         </h1>
-        <p className="text-xs text-indigo-300 font-medium mt-1">
+        <p className="text-sm text-indigo-300 font-medium mt-1">
           Centralized Cloud Storage &bull; Master Administrator &amp; Faculty Accounts
         </p>
       </div>
 
-      {/* Centered Auth Card Container */}
-      <div className="max-w-md w-full mx-auto space-y-4 relative z-10">
+      {/* Centered Auth Card Container - Normal spacious panel size */}
+      <div className="max-w-xl w-full mx-auto space-y-4 relative z-10">
         {/* Main Authentication Card */}
-        <div className="bg-slate-800/90 py-6 px-6 sm:px-8 shadow-2xl rounded-2xl border border-slate-700/80 backdrop-blur-md">
+        <div className="bg-slate-800/95 py-8 px-6 sm:px-10 shadow-2xl rounded-2xl border border-slate-700/80 backdrop-blur-md">
           {/* Top Auth Mode Tabs: Sign In vs Create Account */}
-          <div className="flex rounded-xl bg-slate-900/90 p-1 mb-5 border border-slate-700/60">
+          <div className="flex rounded-xl bg-slate-900/90 p-1 mb-6 border border-slate-700/60">
             <button
               type="button"
               id="tab-sign-in"
@@ -198,13 +200,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                 setError(null);
                 setSuccessMessage(null);
               }}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 authMode === 'login'
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Lock className="w-3.5 h-3.5" />
+              <Lock className="w-4 h-4" />
               <span>Sign In</span>
             </button>
             <button
@@ -215,27 +217,27 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                 setError(null);
                 setSuccessMessage(null);
               }}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 authMode === 'register'
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <UserPlus className="w-3.5 h-3.5" />
+              <UserPlus className="w-4 h-4" />
               <span>Create Teacher Account</span>
             </button>
           </div>
 
           {/* Feedback Alerts */}
           {error && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-950/70 border border-rose-800 text-rose-200 text-xs flex items-start gap-2.5 animate-in fade-in">
+            <div className="mb-5 p-3.5 rounded-xl bg-rose-950/70 border border-rose-800 text-rose-200 text-sm flex items-start gap-2.5 animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
               <div className="leading-snug">{error}</div>
             </div>
           )}
 
           {successMessage && (
-            <div className="mb-4 p-3 rounded-xl bg-emerald-950/70 border border-emerald-800 text-emerald-200 text-xs flex items-start gap-2.5 animate-in fade-in">
+            <div className="mb-5 p-3.5 rounded-xl bg-emerald-950/70 border border-emerald-800 text-emerald-200 text-sm flex items-start gap-2.5 animate-in fade-in">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <div className="leading-snug">{successMessage}</div>
             </div>
@@ -245,9 +247,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
           {authMode === 'login' && (
             <div>
               {/* Credentials Input Form */}
-              <form onSubmit={handleLogin} className="space-y-3.5">
+              <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                  <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">
                     Email address or Username
                   </label>
                   <div className="relative rounded-xl shadow-sm">
@@ -262,15 +264,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                       required
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="Enter email or username"
-                      className="block w-full pl-10 pr-4 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="e.g. pssofttech@gmail.com or vadivubichem@gmail.com"
+                      className="block w-full pl-10 pr-4 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-medium text-slate-300">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs sm:text-sm font-medium text-slate-300">
                       Password
                     </label>
                     <button
@@ -278,7 +280,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                       onClick={() => setForgotOpen(true)}
                       className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
                     >
-                      Forgot?
+                      Forgot password?
                     </button>
                   </div>
                   <div className="relative rounded-xl shadow-sm">
@@ -294,7 +296,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter password"
-                      className="block w-full pl-10 pr-10 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="block w-full pl-10 pr-10 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                     />
                     <button
                       type="button"
@@ -306,6 +308,52 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                   </div>
                 </div>
 
+                {/* Quick Account Selector Pills */}
+                <div className="p-3 bg-slate-900/70 border border-slate-700/60 rounded-xl space-y-2">
+                  <div className="text-[11px] text-slate-400 font-medium flex items-center justify-between">
+                    <span>Quick Select Default Credentials:</span>
+                    <span className="text-[11px] text-indigo-300 font-mono">pwd: password123</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIdentifier('pssofttech@gmail.com');
+                        setPassword('password123');
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg border text-left text-xs transition-all cursor-pointer flex items-center gap-2 ${
+                        identifier === 'pssofttech@gmail.com'
+                          ? 'bg-indigo-600/30 border-indigo-500 text-white font-semibold'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <div className="truncate">
+                        <div className="truncate">pssofttech@gmail.com</div>
+                        <div className="text-[10px] text-indigo-300 font-normal">Administrator</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIdentifier('vadivubichem@gmail.com');
+                        setPassword('password123');
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg border text-left text-xs transition-all cursor-pointer flex items-center gap-2 ${
+                        identifier === 'vadivubichem@gmail.com'
+                          ? 'bg-emerald-600/30 border-emerald-500 text-white font-semibold'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <div className="truncate">
+                        <div className="truncate">vadivubichem@gmail.com</div>
+                        <div className="text-[10px] text-emerald-300 font-normal">Faculty Teacher</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between pt-0.5">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -313,24 +361,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                       id="remember-me"
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-3.5 h-3.5 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500"
+                      className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500"
                     />
-                    <span className="text-xs text-slate-300 select-none">Remember Me</span>
+                    <span className="text-xs sm:text-sm text-slate-300 select-none">Remember Me</span>
                   </label>
-                  <span className="text-[11px] text-slate-400 font-mono">Password: password123</span>
+                  <span className="text-xs text-slate-400">Standard cloud security</span>
                 </div>
 
                 <button
                   type="submit"
                   id="login-submit-button"
                   disabled={loading}
-                  className="w-full mt-2 flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded-xl shadow-md text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 focus:ring-indigo-500 transition-all disabled:opacity-50 cursor-pointer"
+                  className="w-full mt-2 flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 focus:ring-indigo-500 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {loading ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
-                      <span>Sign In</span>
+                      <span>Sign In to Teacher Hub</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -341,8 +389,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
 
           {/* TAB 2: CREATE TEACHER ACCOUNT */}
           {authMode === 'register' && (
-            <form onSubmit={handleRegister} className="space-y-3.5">
-              <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-800/60 text-xs text-indigo-200 flex items-start gap-2">
+            <form onSubmit={handleRegister} className="space-y-4">
+              <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-800/60 text-xs sm:text-sm text-indigo-200 flex items-start gap-2.5">
                 <UserCheck className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-white">Faculty Registration:</span> Enrolls a standard
@@ -351,7 +399,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">
                   Faculty Username <span className="text-rose-400">*</span>
                 </label>
                 <input
@@ -360,12 +408,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                   value={regUsername}
                   onChange={(e) => setRegUsername(e.target.value)}
                   placeholder="e.g. sarah_teacher"
-                  className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">
                   Faculty Email <span className="text-rose-400">*</span>
                 </label>
                 <input
@@ -374,12 +422,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                   value={regEmail}
                   onChange={(e) => setRegEmail(e.target.value)}
                   placeholder="e.g. sarah@school.edu"
-                  className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">
                   Department
                 </label>
                 <input
@@ -387,51 +435,53 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                   value={regDepartment}
                   onChange={(e) => setRegDepartment(e.target.value)}
                   placeholder="e.g. Biochemistry Department"
-                  className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Password <span className="text-rose-400">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={regShowPassword ? 'text' : 'password'}
-                    required
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="Create a password"
-                    className="w-full px-3.5 py-2 pr-10 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setRegShowPassword(!regShowPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-200 cursor-pointer"
-                  >
-                    {regShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">
+                    Password <span className="text-rose-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={regShowPassword ? 'text' : 'password'}
+                      required
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      placeholder="Create password"
+                      className="w-full px-3.5 py-2.5 pr-10 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setRegShowPassword(!regShowPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 cursor-pointer"
+                    >
+                      {regShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Confirm Password <span className="text-rose-400">*</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={regConfirmPassword}
-                  onChange={(e) => setRegConfirmPassword(e.target.value)}
-                  placeholder="Confirm your password"
-                  className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-indigo-500"
-                />
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">
+                    Confirm Password <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    placeholder="Confirm password"
+                    className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md transition-all cursor-pointer disabled:opacity-50"
+                className="w-full py-3 px-4 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md transition-all cursor-pointer disabled:opacity-50"
               >
                 {loading ? 'Creating account...' : 'Create Teacher Account'}
               </button>
@@ -440,7 +490,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                 <button
                   type="button"
                   onClick={() => setAuthMode('login')}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 underline underline-offset-2"
+                  className="text-xs sm:text-sm text-indigo-400 hover:text-indigo-300 underline underline-offset-2 cursor-pointer"
                 >
                   Already have an account? Sign in
                 </button>
