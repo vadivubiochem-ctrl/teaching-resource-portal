@@ -107,12 +107,45 @@ export const INITIAL_USERS: User[] = [
 
 // LocalStorage key for persistent passwords
 const DB_PASSWORDS_KEY = 'teacherhub_user_passwords_v1';
+// LocalStorage key for permanently deleted user accounts
+export const DB_DELETED_USER_IDS_KEY = 'teacherhub_permanently_deleted_users_v1';
+
+export function getDeletedUserIds(): string[] {
+  try {
+    const raw = localStorage.getItem(DB_DELETED_USER_IDS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addDeletedUserId(id: string, email?: string, username?: string): void {
+  try {
+    const list = getDeletedUserIds();
+    const toAdd = [id.trim()];
+    if (email) toAdd.push(email.toLowerCase().trim());
+    if (username) toAdd.push(username.toLowerCase().trim());
+    const updated = Array.from(new Set([...list, ...toAdd]));
+    localStorage.setItem(DB_DELETED_USER_IDS_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to persist deleted user identifier:', e);
+  }
+}
+
+export function isUserDeleted(id: string, email?: string, username?: string): boolean {
+  const list = getDeletedUserIds();
+  if (list.length === 0) return false;
+  if (list.includes(id.trim())) return true;
+  if (email && list.includes(email.toLowerCase().trim())) return true;
+  if (username && list.includes(username.toLowerCase().trim())) return true;
+  return false;
+}
 
 const DEFAULT_PASSWORDS: Record<string, string[]> = {
-  usr_pssofttech: ['password123', 'pssofttech', 'pssofttech@gmail.com', 'admin', 'admin123'],
-  usr_vadivubichem: ['password123', 'vadivubichem', 'vadivubichem@gmail.com', 'vadivubiochem', 'teacher'],
-  usr_emal: ['email password', 'emal', 'password123'],
-  usr_vasisoft: ['password123', 'vasisoft'],
+  usr_pssofttech: ['admin123', 'password123', 'pssofttech', 'pssofttech@gmail.com', 'admin'],
+  usr_vadivubichem: ['admin123', 'password123', 'vadivubichem', 'vadivubichem@gmail.com', 'vadivubiochem', 'teacher'],
+  usr_emal: ['admin123', 'email password', 'emal', 'password123'],
+  usr_vasisoft: ['admin123', 'password123', 'vasisoft'],
 };
 
 export function getStoredPasswords(): Record<string, string[]> {
@@ -136,6 +169,17 @@ export function saveStoredPassword(userId: string, password: string): void {
     USER_PASSWORDS[userId] = current[userId];
   } catch (e) {
     console.error('Failed to persist user password:', e);
+  }
+}
+
+export function removeStoredPassword(userId: string): void {
+  try {
+    const current = getStoredPasswords();
+    delete current[userId];
+    localStorage.setItem(DB_PASSWORDS_KEY, JSON.stringify(current));
+    delete USER_PASSWORDS[userId];
+  } catch (e) {
+    console.error('Failed to remove user password:', e);
   }
 }
 
@@ -569,6 +613,21 @@ export class LocalStore {
     // Auto-migrate: enforce school assignment & roles
     let modified = false;
 
+    // Filter out any permanently deleted accounts
+    const deletedIds = getDeletedUserIds();
+    if (deletedIds.length > 0) {
+      const originalCount = users.length;
+      users = users.filter(
+        (u) =>
+          !deletedIds.includes(u.id) &&
+          !deletedIds.includes((u.email || '').toLowerCase().trim()) &&
+          !deletedIds.includes((u.username || '').toLowerCase().trim())
+      );
+      if (users.length !== originalCount) {
+        modified = true;
+      }
+    }
+
     // Filter out obsolete separate admin account if present
     const prevAdminUser = users.find((u) => u.id === 'usr_admin');
     if (prevAdminUser) {
@@ -600,7 +659,7 @@ export class LocalStore {
       modified = true;
     }
 
-    // Ensure pssofttech exists as State Admin for Govt Hr Sec School Pannaipuram
+    // Ensure pssofttech exists as Sovereign State Admin for Govt Hr Sec School Pannaipuram (cannot be deleted)
     let adminUser = users.find(
       (u) =>
         u.id === 'usr_pssofttech' ||
@@ -654,59 +713,82 @@ export class LocalStore {
       }
     }
 
-    // Ensure vadivubichem exists as a State Teacher in Govt Hr Sec School Pannaipuram
-    let vadivuUser = users.find(
-      (u) =>
-        u.id === 'usr_vadivubichem' ||
-        (u.email || '').toLowerCase() === 'vadivubiochem@gmail.com' ||
-        (u.email || '').toLowerCase() === 'vadivubichem@gmail.com' ||
-        (u.username || '').toLowerCase() === 'vadivubichem' ||
-        (u.username || '').toLowerCase() === 'vadivubiochem'
-    );
+    // Manage vadivubichem: ONLY populate if NOT explicitly deleted by the administrator
+    const isVadivuDeleted = isUserDeleted(
+      'usr_vadivubichem',
+      'vadivubichem@gmail.com',
+      'vadivubichem'
+    ) || isUserDeleted('usr_vadivubiochem_alt', 'vadivubiochem@gmail.com', 'vadivubiochem');
 
-    if (!vadivuUser) {
-      vadivuUser = {
-        id: 'usr_vadivubichem',
-        schoolId: 'SCH_PANNAIPURAM',
-        school_name: 'Govt Hr Sec School Pannaipuram',
-        school_code: 'STATE-405',
-        username: 'vadivubichem',
-        email: 'vadivubichem@gmail.com',
-        role: 'teacher',
-        status: 'active',
-        department: 'Biochemistry Department',
-        storage_used: 356200000,
-        storage_limit: 16106127360, // 15 GB
-        created_at: '2026-02-22T08:45:00.000Z',
-        permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
-      };
-      users.push(vadivuUser);
-      modified = true;
+    if (!isVadivuDeleted) {
+      let vadivuUser = users.find(
+        (u) =>
+          u.id === 'usr_vadivubichem' ||
+          (u.email || '').toLowerCase() === 'vadivubiochem@gmail.com' ||
+          (u.email || '').toLowerCase() === 'vadivubichem@gmail.com' ||
+          (u.username || '').toLowerCase() === 'vadivubichem' ||
+          (u.username || '').toLowerCase() === 'vadivubiochem'
+      );
+
+      if (!vadivuUser) {
+        vadivuUser = {
+          id: 'usr_vadivubichem',
+          schoolId: 'SCH_PANNAIPURAM',
+          school_name: 'Govt Hr Sec School Pannaipuram',
+          school_code: 'STATE-405',
+          username: 'vadivubichem',
+          email: 'vadivubichem@gmail.com',
+          role: 'teacher',
+          status: 'active',
+          department: 'Biochemistry Department',
+          storage_used: 356200000,
+          storage_limit: 16106127360, // 15 GB
+          created_at: '2026-02-22T08:45:00.000Z',
+          permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
+        };
+        users.push(vadivuUser);
+        modified = true;
+      } else {
+        if (
+          vadivuUser.schoolId !== 'SCH_PANNAIPURAM' ||
+          vadivuUser.school_code !== 'STATE-405' ||
+          vadivuUser.school_name !== 'Govt Hr Sec School Pannaipuram'
+        ) {
+          vadivuUser.schoolId = 'SCH_PANNAIPURAM';
+          vadivuUser.school_name = 'Govt Hr Sec School Pannaipuram';
+          vadivuUser.school_code = 'STATE-405';
+          modified = true;
+        }
+        if (vadivuUser.role !== 'teacher') {
+          vadivuUser.role = 'teacher';
+          modified = true;
+        }
+        if (vadivuUser.email !== 'vadivubichem@gmail.com') {
+          vadivuUser.email = 'vadivubichem@gmail.com';
+          modified = true;
+        }
+        if (vadivuUser.storage_limit > 50000000000) {
+          vadivuUser.storage_limit = 16106127360; // 15 GB
+          modified = true;
+        }
+        if (!vadivuUser.permissions) {
+          vadivuUser.permissions = { ...DEFAULT_TEACHER_PERMISSIONS };
+          modified = true;
+        }
+      }
     } else {
-      if (
-        vadivuUser.schoolId !== 'SCH_PANNAIPURAM' ||
-        vadivuUser.school_code !== 'STATE-405' ||
-        vadivuUser.school_name !== 'Govt Hr Sec School Pannaipuram'
-      ) {
-        vadivuUser.schoolId = 'SCH_PANNAIPURAM';
-        vadivuUser.school_name = 'Govt Hr Sec School Pannaipuram';
-        vadivuUser.school_code = 'STATE-405';
-        modified = true;
-      }
-      if (vadivuUser.role !== 'teacher') {
-        vadivuUser.role = 'teacher';
-        modified = true;
-      }
-      if (vadivuUser.email !== 'vadivubichem@gmail.com') {
-        vadivuUser.email = 'vadivubichem@gmail.com';
-        modified = true;
-      }
-      if (vadivuUser.storage_limit > 50000000000) {
-        vadivuUser.storage_limit = 16106127360; // 15 GB
-        modified = true;
-      }
-      if (!vadivuUser.permissions) {
-        vadivuUser.permissions = { ...DEFAULT_TEACHER_PERMISSIONS };
+      // Ensure completely pruned if in deleted list
+      const prevCount = users.length;
+      users = users.filter(
+        (u) =>
+          u.id !== 'usr_vadivubichem' &&
+          u.id !== 'usr_vadivubiochem_alt' &&
+          (u.email || '').toLowerCase() !== 'vadivubichem@gmail.com' &&
+          (u.email || '').toLowerCase() !== 'vadivubiochem@gmail.com' &&
+          (u.username || '').toLowerCase() !== 'vadivubichem' &&
+          (u.username || '').toLowerCase() !== 'vadivubiochem'
+      );
+      if (users.length !== prevCount) {
         modified = true;
       }
     }
@@ -737,6 +819,43 @@ export class LocalStore {
       this.saveUsers(users);
     }
     return users;
+  }
+
+  static permanentlyDeleteUser(id: string): User | undefined {
+    let users = this.getUsers();
+    const target = users.find((u) => u.id === id);
+    if (!target) return undefined;
+
+    // Track permanently deleted identifier so it is NEVER restored
+    addDeletedUserId(target.id, target.email, target.username);
+
+    // Remove user record
+    users = users.filter((u) => u.id !== id);
+    this.saveUsers(users);
+
+    // Remove stored credentials
+    removeStoredPassword(id);
+
+    // Purge files owned by this user
+    let files = this.getFiles();
+    files = files.filter((f) => f.user_id !== id);
+    this.saveFiles(files);
+
+    // Purge folders owned by this user
+    let folders = this.getFolders();
+    folders = folders.filter((f) => f.user_id !== id);
+    this.saveFolders(folders);
+
+    // Recalculate storage metrics
+    this.recalculateStorage();
+
+    // If active session belongs to this deleted user, terminate session
+    const currentToken = this.getAuthToken();
+    if (currentToken === id) {
+      this.clearSession();
+    }
+
+    return target;
   }
 
   static recalculateStorage(): void {
@@ -1011,6 +1130,10 @@ export class LocalStore {
     const users = this.getUsers();
     const user = users.find((u) => u.id === token);
     return user || null;
+  }
+
+  static getAuthToken(): string | null {
+    return localStorage.getItem(CURRENT_TOKEN_KEY);
   }
 
   static setSessionUser(userId: string): void {

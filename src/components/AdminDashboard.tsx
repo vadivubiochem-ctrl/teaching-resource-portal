@@ -106,6 +106,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Delete user confirmation modal
   const [deleteModalUser, setDeleteModalUser] = useState<User | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Adjust quota modal
   const [quotaModalUser, setQuotaModalUser] = useState<User | null>(null);
@@ -160,7 +161,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       await api.createAdminUser({
         username: newUsername.trim(),
         email: newEmail.trim(),
-        password: newPassword || 'password123',
+        password: newPassword || 'admin123',
         role: newRole,
         department: newDept.trim() || (newRole === 'admin' ? 'System Administration' : 'General Faculty'),
         storage_limit: Math.round(newQuotaGB * 1024 * 1024 * 1024),
@@ -340,7 +341,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Handler: Delete User
+  // Handler: Delete User Permanently
   const handleConfirmDeleteUser = async () => {
     if (!deleteModalUser) return;
     if (deleteModalUser.id === currentUser.id) {
@@ -348,13 +349,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setDeleteModalUser(null);
       return;
     }
+    setDeleteLoading(true);
     try {
-      await api.deleteAdminUser(deleteModalUser.id);
-      setBanner({ type: 'success', text: `User ${deleteModalUser.username} and associated resources deleted.` });
+      const userToDelete = deleteModalUser;
+      await api.deleteAdminUser(userToDelete.id);
+      // Immediately remove from current state table
+      setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
+      setBanner({
+        type: 'success',
+        text: `User account "${userToDelete.username}" (${userToDelete.email}) and all associated files/folders have been permanently deleted.`,
+      });
       setDeleteModalUser(null);
-      fetchAdminData();
+      await fetchAdminData();
     } catch (err: any) {
-      setBanner({ type: 'error', text: err.message });
+      setBanner({ type: 'error', text: err.message || 'Failed to permanently delete user account.' });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -2654,30 +2664,60 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* 5. Delete User Confirmation Modal */}
       {deleteModalUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-          <div className="bg-slate-900 border border-rose-800/80 rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-2.5 text-rose-400 font-bold text-sm">
-              <AlertTriangle className="w-5 h-5" />
-              <span>Confirm Account Deletion</span>
+          <div className="bg-slate-900 border border-rose-800/80 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2.5 text-rose-400 font-bold text-base">
+              <div className="w-8 h-8 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              <div>
+                <div>Permanently Delete Account</div>
+                <div className="text-[10px] text-rose-400/80 font-normal uppercase tracking-wider">Irreversible Action</div>
+              </div>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Are you sure you want to permanently delete the account for <span className="font-semibold text-white">{deleteModalUser.username}</span> ({deleteModalUser.email})? All curricular resources and folders owned by this teacher will be permanently removed.
+            <div className="p-3 bg-rose-950/30 border border-rose-800/40 rounded-xl text-xs text-rose-200 space-y-1">
+              <p className="font-semibold text-white">
+                Are you sure you want to permanently delete this user account?
+              </p>
+              <div className="text-[11px] text-slate-300 space-y-0.5 pt-1">
+                <div>&bull; <strong className="text-white">Username:</strong> {deleteModalUser.username}</div>
+                <div>&bull; <strong className="text-white">Email:</strong> {deleteModalUser.email}</div>
+                <div>&bull; <strong className="text-white">Department:</strong> {deleteModalUser.department || 'Faculty'}</div>
+                <div>&bull; <strong className="text-white">Role:</strong> {deleteModalUser.role}</div>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              This action will immediately and permanently delete this account, its login credentials, and all uploaded files and folders. This cannot be undone.
             </p>
 
-            <div className="pt-2 flex justify-end gap-2">
+            <div className="pt-2 flex justify-end gap-2.5">
               <button
                 type="button"
+                disabled={deleteLoading}
                 onClick={() => setDeleteModalUser(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 disabled:opacity-50 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                id="btn-confirm-delete-user-permanently"
+                disabled={deleteLoading}
                 onClick={handleConfirmDeleteUser}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs font-semibold text-white transition-colors cursor-pointer"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-rose-800 disabled:opacity-60 rounded-xl text-xs font-bold text-white transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
               >
-                Permanently Delete
+                {deleteLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Permanently Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Permanently Delete</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

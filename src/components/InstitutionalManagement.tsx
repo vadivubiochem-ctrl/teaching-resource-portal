@@ -67,7 +67,7 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
   const [addTeacherModalOpen, setAddTeacherModalOpen] = useState(false);
   const [teacherUsername, setTeacherUsername] = useState('');
   const [teacherEmail, setTeacherEmail] = useState('');
-  const [teacherPassword, setTeacherPassword] = useState('password123');
+  const [teacherPassword, setTeacherPassword] = useState('admin123');
   const [teacherDept, setTeacherDept] = useState('General Faculty');
   const [teacherQuotaGB, setTeacherQuotaGB] = useState<number>(15);
   const [teacherRole, setTeacherRole] = useState<'teacher' | 'admin'>('teacher');
@@ -80,6 +80,10 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
   // Password reset modal
   const [resetTeacher, setResetTeacher] = useState<User | null>(null);
   const [newPasswordVal, setNewPasswordVal] = useState('');
+
+  // Delete teacher modal
+  const [deleteModalTeacher, setDeleteModalTeacher] = useState<User | null>(null);
+  const [deleteTeacherLoading, setDeleteTeacherLoading] = useState(false);
 
   // Copied code feedback
   const [copiedCode, setCopiedCode] = useState(false);
@@ -203,7 +207,7 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
       await api.createAdminUser({
         username: teacherUsername.trim(),
         email: teacherEmail.trim(),
-        password: teacherPassword || 'password123',
+        password: teacherPassword || 'admin123',
         role: teacherRole,
         department: teacherDept.trim() || 'General Faculty',
         storage_limit: Math.round(teacherQuotaGB * 1024 * 1024 * 1024),
@@ -218,7 +222,7 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
       setAddTeacherModalOpen(false);
       setTeacherUsername('');
       setTeacherEmail('');
-      setTeacherPassword('password123');
+      setTeacherPassword('admin123');
       setTeacherDept('General Faculty');
       setTeacherQuotaGB(15);
       setTeacherRole('teacher');
@@ -288,22 +292,28 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
   };
 
   // Handle Delete Teacher
-  const handleDeleteTeacher = async (u: User) => {
+  const handleDeleteTeacher = (u: User) => {
     if (u.id === currentUser.id) {
       setBanner({ type: 'error', text: 'You cannot delete your own active administrator account.' });
       return;
     }
-    if (!window.confirm(`Are you sure you want to remove teacher "${u.username}" and their resources from this school?`)) {
-      return;
-    }
+    setDeleteModalTeacher(u);
+  };
 
+  const handleConfirmDeleteTeacher = async () => {
+    if (!deleteModalTeacher) return;
+    setDeleteTeacherLoading(true);
     try {
-      await api.deleteAdminUser(u.id);
-      setBanner({ type: 'success', text: `Faculty member ${u.username} removed.` });
-      loadData(selectedSchoolId);
+      const targetUser = deleteModalTeacher;
+      await api.deleteAdminUser(targetUser.id);
+      setBanner({ type: 'success', text: `Faculty account "${targetUser.username}" and associated resources permanently removed.` });
+      setDeleteModalTeacher(null);
+      await loadData(selectedSchoolId);
       if (onRefresh) onRefresh();
     } catch (err: any) {
-      setBanner({ type: 'error', text: err.message });
+      setBanner({ type: 'error', text: err.message || 'Failed to delete faculty member.' });
+    } finally {
+      setDeleteTeacherLoading(false);
     }
   };
 
@@ -684,7 +694,7 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
                             type="button"
                             onClick={() => {
                               setResetTeacher(u);
-                              setNewPasswordVal('password123');
+                              setNewPasswordVal('admin123');
                             }}
                             className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors cursor-pointer"
                             title="Reset Teacher Password"
@@ -1104,6 +1114,69 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DELETE TEACHER PERMANENTLY */}
+      {deleteModalTeacher && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-rose-800/80 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2.5 text-rose-400 font-bold text-base">
+              <div className="w-8 h-8 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              <div>
+                <div>Permanently Delete Account</div>
+                <div className="text-[10px] text-rose-400/80 font-normal uppercase tracking-wider">Irreversible Action</div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-rose-950/30 border border-rose-800/40 rounded-xl text-xs text-rose-200 space-y-1">
+              <p className="font-semibold text-white">
+                Are you sure you want to permanently delete this user account?
+              </p>
+              <div className="text-[11px] text-slate-300 space-y-0.5 pt-1">
+                <div>&bull; <strong className="text-white">Username:</strong> {deleteModalTeacher.username}</div>
+                <div>&bull; <strong className="text-white">Email:</strong> {deleteModalTeacher.email}</div>
+                <div>&bull; <strong className="text-white">Department:</strong> {deleteModalTeacher.department || 'Faculty'}</div>
+                <div>&bull; <strong className="text-white">Role:</strong> {deleteModalTeacher.role}</div>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              This action will immediately and permanently delete this account, its login credentials, and all uploaded files and folders. This cannot be undone.
+            </p>
+
+            <div className="pt-2 flex justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={deleteTeacherLoading}
+                onClick={() => setDeleteModalTeacher(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-delete-teacher-permanently"
+                disabled={deleteTeacherLoading}
+                onClick={handleConfirmDeleteTeacher}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-rose-800 disabled:opacity-60 rounded-xl text-xs font-bold text-white transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+              >
+                {deleteTeacherLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Permanently Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Permanently Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

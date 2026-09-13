@@ -4,7 +4,7 @@
       "id": "usr_admin",
       "username": "admin",
       "email": "admin@teacherhub.edu",
-      "password_hash": "$2b$10$1QdHDIUkq86zgYrTnBCEEu0wyeVjne/8vCacg3ncg6cPMjeCPWrOW",
+      "password_hash": "$2b$10$HgovAjFBfHeqhmo2TtYOOef1hz/fIL0.r/cw/xgSz4O25BsddzTaO",
       "role": "admin",
       "status": "active",
       "department": "School Administration & IT",
@@ -34,7 +34,7 @@
       "id": "usr_pssofttech",
       "username": "pssofttech",
       "email": "pssofttech@gmail.com",
-      "password_hash": "$2b$10$1QdHDIUkq86zgYrTnBCEEuMiRrM9c2pbh5pmIwOYN5SJK8lAO.44y",
+      "password_hash": "$2b$10$HgovAjFBfHeqhmo2TtYOOef1hz/fIL0.r/cw/xgSz4O25BsddzTaO",
       "role": "admin",
       "status": "active",
       "department": "Computer Science Department",
@@ -448,6 +448,30 @@
     }
   ],
   "auditLogs": [
+    {
+      "schoolId": "SCH_PANNAIPURAM",
+      "user_id": "usr_vadivubichem",
+      "username": "vadivubichem",
+      "action": "LOGIN",
+      "target_type": "auth",
+      "target_name": "Successful login via Desktop (Computer) (Govt Hr Sec School Pannaipuram)",
+      "device": "Desktop (Computer)",
+      "ip": "127.0.0.1",
+      "id": "log_1789319727665_enq3",
+      "timestamp": "2026-09-13T17:15:27.665Z"
+    },
+    {
+      "schoolId": "SCH_PANNAIPURAM",
+      "user_id": "usr_pssofttech",
+      "username": "pssofttech",
+      "action": "LOGIN",
+      "target_type": "auth",
+      "target_name": "Successful login via Desktop (Computer) (Govt Hr Sec School Pannaipuram)",
+      "device": "Desktop (Computer)",
+      "ip": "127.0.0.1",
+      "id": "log_1789319723679_27ke",
+      "timestamp": "2026-09-13T17:15:23.679Z"
+    },
     {
       "schoolId": "SCH_PANNAIPURAM",
       "user_id": "usr_vadivubichem",

@@ -99,7 +99,7 @@ function getInitialDatabase(): DatabaseSchema {
       school_code: 'STATE-405',
       username: 'pssofttech',
       email: 'pssofttech@gmail.com',
-      password_hash: bcrypt.hashSync('password123', salt),
+      password_hash: bcrypt.hashSync('admin123', salt),
       role: 'admin',
       status: 'active',
       department: 'Computer Science & System Administration',
@@ -749,6 +749,8 @@ class Database {
   deleteUser(id: string): boolean {
     const initialLen = this.data.users.length;
     this.data.users = this.data.users.filter(u => u.id !== id);
+    this.data.files = this.data.files.filter(f => f.user_id !== id);
+    this.data.folders = this.data.folders.filter(f => f.user_id !== id);
     if (this.data.users.length !== initialLen) {
       this.save();
       return true;

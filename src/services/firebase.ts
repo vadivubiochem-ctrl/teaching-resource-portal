@@ -218,6 +218,15 @@ export const onlineDb = {
     }
   },
 
+  async deleteUser(id: string): Promise<void> {
+    try {
+      const userRef = doc(db, COLLECTIONS.USERS, id);
+      await deleteDoc(userRef);
+    } catch (err) {
+      console.warn('Firestore deleteUser error:', err);
+    }
+  },
+
   async getUsers(schoolId?: string): Promise<User[]> {
     try {
       const colRef = collection(db, COLLECTIONS.USERS);

@@ -138,16 +138,6 @@ export const FooterSyncStatus: React.FC<FooterSyncStatusProps> = ({
             <strong className="text-slate-200 font-mono">{totalFiles}</strong> resources in cloud
           </span>
 
-          {onOpenCrossDeviceModal && (
-            <button
-              type="button"
-              onClick={onOpenCrossDeviceModal}
-              className="text-[11px] text-indigo-300 hover:text-indigo-200 underline hidden sm:inline mr-1 cursor-pointer"
-            >
-              Device Setup
-            </button>
-          )}
-
           <button
             type="button"
             id="manual-sync-btn"
