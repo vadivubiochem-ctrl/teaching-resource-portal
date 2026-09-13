@@ -167,6 +167,20 @@ export async function getFileBinary(
     return { blob: storedBlob, arrayBuffer, url };
   }
 
+  // 2b. If online Firestore stored base64 content, convert to binary data
+  if (file.content_base64) {
+    try {
+      const res = await fetch(file.content_base64);
+      if (res.ok) {
+        const blob = await res.blob();
+        const arrayBuffer = await blob.arrayBuffer();
+        return { blob, arrayBuffer, url: file.content_base64 };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // 3. If storage_path is an Object URL or data URL
   if (file.storage_path && (file.storage_path.startsWith('blob:') || file.storage_path.startsWith('data:'))) {
     try {

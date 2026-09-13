@@ -1,0 +1,124 @@
+{
+  "entities": {
+    "School": {
+      "title": "School",
+      "description": "Educational institution tenant profile with unique registration code and storage quota",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "contact_email": { "type": "string" },
+        "created_at": { "type": "string" },
+        "storage_quota_bytes": { "type": "number" },
+        "admin_id": { "type": "string" }
+      },
+      "required": ["id", "code", "name"]
+    },
+    "TeachingFile": {
+      "title": "TeachingFile",
+      "description": "Educational resource document, audio, video or other teaching material",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "user_id": { "type": "string" },
+        "folder_id": { "type": "string" },
+        "file_name": { "type": "string" },
+        "file_type": { "type": "string" },
+        "file_extension": { "type": "string" },
+        "file_size": { "type": "number" },
+        "storage_path": { "type": "string" },
+        "device": { "type": "string" },
+        "uploaded_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "is_favorite": { "type": "boolean" },
+        "is_trashed": { "type": "boolean" },
+        "mime_type": { "type": "string" },
+        "owner_name": { "type": "string" },
+        "owner_email": { "type": "string" },
+        "shared_mode": { "type": "string" },
+        "content_base64": { "type": "string" }
+      },
+      "required": ["id", "file_name", "file_type", "user_id"]
+    },
+    "Folder": {
+      "title": "Folder",
+      "description": "Category folder or custom subfolder for teaching resources",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "user_id": { "type": "string" },
+        "parent_folder_id": { "type": "string" },
+        "folder_name": { "type": "string" },
+        "color": { "type": "string" },
+        "created_at": { "type": "string" },
+        "file_count": { "type": "number" }
+      },
+      "required": ["id", "folder_name", "user_id"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Teacher or Administrator account profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "school_name": { "type": "string" },
+        "school_code": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "status": { "type": "string" },
+        "department": { "type": "string" },
+        "storage_used": { "type": "number" },
+        "storage_limit": { "type": "number" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "username", "email", "role"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Activity log entry for uploads, logins, and file operations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "user_id": { "type": "string" },
+        "username": { "type": "string" },
+        "action": { "type": "string" },
+        "target_type": { "type": "string" },
+        "target_name": { "type": "string" },
+        "device": { "type": "string" },
+        "ip": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "details": { "type": "string" }
+      },
+      "required": ["id", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/schools/{schoolId}": {
+      "schema": "School",
+      "description": "Educational institution profiles and registered school codes"
+    },
+    "/files/{fileId}": {
+      "schema": "TeachingFile",
+      "description": "Uploaded educational files and documents synchronized across devices"
+    },
+    "/folders/{folderId}": {
+      "schema": "Folder",
+      "description": "Organization folders synchronized across devices"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile state and storage quotas"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Activity log audit records"
+    }
+  }
+}

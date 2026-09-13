@@ -43,6 +43,7 @@ export function validateSessionToken(token?: string): StoredUser | null {
 
 export interface AuthenticatedRequest extends Request {
   user?: StoredUser;
+  schoolId?: string;
 }
 
 export function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -59,6 +60,7 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
     const user = validateSessionToken(token);
     if (user) {
       req.user = user;
+      req.schoolId = user.schoolId || 'SCH_PANNAIPURAM';
     }
   }
 
@@ -82,5 +84,26 @@ export function requireAdmin(req: AuthenticatedRequest, res: Response, next: Nex
     res.status(403).json({ error: 'Admin access privileges required.' });
     return;
   }
+  next();
+}
+
+/**
+ * Middleware that validates the 'schoolId' during all database operations,
+ * ensuring data from one school is strictly inaccessible to users from another school.
+ */
+export function validateTenantSchoolMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const userSchoolId = req.user?.schoolId || (req.headers['x-school-id'] as string) || 'SCH_PANNAIPURAM';
+  const targetSchoolId = (req.headers['x-school-id'] as string) || (req.query.schoolId as string) || req.body?.schoolId;
+
+  if (req.user && targetSchoolId && targetSchoolId !== req.user.schoolId) {
+    res.status(403).json({
+      error: 'Cross-Institutional Access Denied: You cannot access or modify resources belonging to another institution.',
+      currentSchoolId: req.user.schoolId,
+      attemptedSchoolId: targetSchoolId,
+    });
+    return;
+  }
+
+  req.schoolId = userSchoolId;
   next();
 }

@@ -6,10 +6,12 @@ import type {
   AuditLog,
   UploadProgressItem,
   TeacherPermissions,
+  School,
 } from '../types.js';
 import { DEFAULT_TEACHER_PERMISSIONS } from '../types.js';
 
 // Storage keys
+const DB_SCHOOLS_KEY = 'teacher_hub_db_schools_v1';
 const DB_USERS_KEY = 'teacher_hub_db_users';
 const DB_FILES_KEY = 'teacher_hub_db_files';
 const DB_FOLDERS_KEY = 'teacher_hub_db_folders';
@@ -17,52 +19,87 @@ const DB_LOGS_KEY = 'teacher_hub_db_logs';
 const CURRENT_TOKEN_KEY = 'teacher_hub_token';
 const SIMULATED_DEVICE_KEY = 'teacher_hub_simulated_device';
 
-// Default Accounts: Single Master Admin (pssofttech) and Multi-User Teachers
+// Default Educational Institutions / Schools
+export const DEFAULT_SCHOOLS: School[] = [
+  {
+    id: 'SCH_PANNAIPURAM',
+    code: 'STATE-405',
+    name: 'Govt Hr Sec School Pannaipuram',
+    address: 'Main Road, Pannaipuram, Theni District, Tamil Nadu',
+    contact_email: 'admin@ghsspannaipuram.edu',
+    created_at: '2026-01-10T08:00:00.000Z',
+    storage_quota_bytes: 214748364800, // 200 GB
+    admin_id: 'usr_pssofttech',
+  },
+  {
+    id: 'SCH_STJOHNS',
+    code: 'STJOHN-303',
+    name: "St. John's Higher Secondary School",
+    address: '88 Cathedral Road, South Wing',
+    contact_email: 'principal@stjohns.edu',
+    created_at: '2026-02-01T09:00:00.000Z',
+    storage_quota_bytes: 107374182400, // 100 GB
+  },
+];
+
+// Default Accounts: State Admin (pssofttech) and State Teacher (vadivubichem)
 export const INITIAL_USERS: User[] = [
   {
     id: 'usr_pssofttech',
+    schoolId: 'SCH_PANNAIPURAM',
+    school_name: 'Govt Hr Sec School Pannaipuram',
+    school_code: 'STATE-405',
     username: 'pssofttech',
     email: 'pssofttech@gmail.com',
     role: 'admin',
     status: 'active',
     department: 'Computer Science & System Administration',
     storage_used: 412500000,
-    storage_limit: 107374182400, // 100 GB Master Admin pool
+    storage_limit: 107374182400, // 100 GB State Admin pool
     created_at: '2026-02-15T11:00:00.000Z',
   },
   {
     id: 'usr_vadivubichem',
+    schoolId: 'SCH_PANNAIPURAM',
+    school_name: 'Govt Hr Sec School Pannaipuram',
+    school_code: 'STATE-405',
     username: 'vadivubichem',
     email: 'vadivubichem@gmail.com',
     role: 'teacher',
     status: 'active',
     department: 'Biochemistry Department',
     storage_used: 356200000,
-    storage_limit: 16106127360, // 15 GB Multi-user account
+    storage_limit: 16106127360, // 15 GB State Teacher quota
     created_at: '2026-02-22T08:45:00.000Z',
     permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
   },
   {
     id: 'usr_emal',
+    schoolId: 'SCH_PANNAIPURAM',
+    school_name: 'Govt Hr Sec School Pannaipuram',
+    school_code: 'STATE-405',
     username: 'emal',
     email: 'emal@teacherhub.edu',
     role: 'teacher',
     status: 'active',
     department: 'Science & Computing',
     storage_used: 284160000,
-    storage_limit: 16106127360, // 15 GB Multi-user account
+    storage_limit: 16106127360, // 15 GB
     created_at: '2026-02-01T09:30:00.000Z',
     permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
   },
   {
     id: 'usr_vasisoft',
+    schoolId: 'SCH_PANNAIPURAM',
+    school_name: 'Govt Hr Sec School Pannaipuram',
+    school_code: 'STATE-405',
     username: 'vasisoft',
     email: 'vasisoft20815@gmail.com',
     role: 'teacher',
     status: 'active',
     department: 'Mathematics & Advanced Technology',
     storage_used: 198700000,
-    storage_limit: 16106127360, // 15 GB Multi-user account
+    storage_limit: 16106127360, // 15 GB
     created_at: '2026-02-20T14:15:00.000Z',
     permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
   },
@@ -109,6 +146,7 @@ export const USER_PASSWORDS: Record<string, string[]> = getStoredPasswords();
 export const INITIAL_FOLDERS: Folder[] = [
   {
     id: 'fld_sci_curriculum',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_emal',
     parent_folder_id: null,
     folder_name: 'Science Curriculum (Class 10-12)',
@@ -118,6 +156,7 @@ export const INITIAL_FOLDERS: Folder[] = [
   },
   {
     id: 'fld_video_lessons',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_emal',
     parent_folder_id: 'fld_sci_curriculum',
     folder_name: 'Recorded Video Lectures',
@@ -127,6 +166,7 @@ export const INITIAL_FOLDERS: Folder[] = [
   },
   {
     id: 'fld_cs_modules',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_pssofttech',
     parent_folder_id: null,
     folder_name: 'CS Python & Data Structures',
@@ -136,6 +176,7 @@ export const INITIAL_FOLDERS: Folder[] = [
   },
   {
     id: 'fld_biochem_labs',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_vadivubichem',
     parent_folder_id: null,
     folder_name: 'Biochemistry Lab Experiments & Diagrams',
@@ -145,6 +186,7 @@ export const INITIAL_FOLDERS: Folder[] = [
   },
   {
     id: 'fld_math_worksheets',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_vasisoft',
     parent_folder_id: null,
     folder_name: 'Calculus & Linear Algebra Worksheets',
@@ -158,6 +200,7 @@ export const INITIAL_FOLDERS: Folder[] = [
 export const INITIAL_FILES: TeachingFile[] = [
   {
     id: 'file_01_cell_biology',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_emal',
     folder_id: 'fld_sci_curriculum',
     file_name: 'Cellular_Respiration_Lesson_Plan.pdf',
@@ -177,6 +220,7 @@ export const INITIAL_FILES: TeachingFile[] = [
   },
   {
     id: 'file_02_physics_video',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_emal',
     folder_id: 'fld_video_lessons',
     file_name: 'Electromagnetic_Induction_Lecture.mp4',
@@ -198,6 +242,7 @@ export const INITIAL_FILES: TeachingFile[] = [
   },
   {
     id: 'file_03_pronunciation_audio',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_emal',
     folder_id: 'fld_sci_curriculum',
     file_name: 'Scientific_Nomenclature_Audio_Guide.mp3',
@@ -218,6 +263,7 @@ export const INITIAL_FILES: TeachingFile[] = [
   },
   {
     id: 'file_04_dna_diagram',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_vadivubichem',
     folder_id: 'fld_biochem_labs',
     file_name: 'DNA_Replication_Fork_Diagram.png',
@@ -237,6 +283,7 @@ export const INITIAL_FILES: TeachingFile[] = [
   },
   {
     id: 'file_05_python_cheatsheet',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_pssofttech',
     folder_id: 'fld_cs_modules',
     file_name: 'Python_Algorithms_Comprehensive_Notes.docx',
@@ -256,6 +303,7 @@ export const INITIAL_FILES: TeachingFile[] = [
   },
   {
     id: 'file_06_calculus_worksheet',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_vasisoft',
     folder_id: 'fld_math_worksheets',
     file_name: 'Integral_Calculus_Practice_Set_2026.pdf',
@@ -275,6 +323,7 @@ export const INITIAL_FILES: TeachingFile[] = [
   },
   {
     id: 'file_07_biochem_audio',
+    schoolId: 'SCH_PANNAIPURAM',
     user_id: 'usr_vadivubichem',
     folder_id: 'fld_biochem_labs',
     file_name: 'Enzyme_Kinetics_Audio_Walkthrough.mp3',
@@ -358,6 +407,151 @@ export async function getBlob(fileId: string): Promise<Blob | null> {
 
 // Local Repository Store
 export class LocalStore {
+  // Educational Institutions / Multi-School Tenancy
+  static getSchools(): School[] {
+    const raw = localStorage.getItem(DB_SCHOOLS_KEY);
+    let parsed: School[];
+    if (!raw) {
+      parsed = [...DEFAULT_SCHOOLS];
+      localStorage.setItem(DB_SCHOOLS_KEY, JSON.stringify(parsed));
+      return parsed;
+    }
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = [...DEFAULT_SCHOOLS];
+    }
+
+    let changed = false;
+
+    // Remove Riverside Collegiate Institute completely
+    if (parsed.some((s) => s.id === 'SCH_RIVERSIDE' || s.code === 'RIVER-202' || (s.name || '').includes('Riverside'))) {
+      parsed = parsed.filter(
+        (s) => s.id !== 'SCH_RIVERSIDE' && s.code !== 'RIVER-202' && !(s.name || '').includes('Riverside')
+      );
+      changed = true;
+    }
+
+    // Migrate Central High to Govt Hr Sec School Pannaipuram
+    for (let i = 0; i < parsed.length; i++) {
+      if (
+        parsed[i].id === 'SCH_CENTRAL' ||
+        parsed[i].code === 'CENTRAL-101' ||
+        parsed[i].code === 'SCH_CENTRAL' ||
+        (parsed[i].name || '').includes('Central High')
+      ) {
+        parsed[i] = {
+          ...parsed[i],
+          id: 'SCH_PANNAIPURAM',
+          code: 'STATE-405',
+          name: 'Govt Hr Sec School Pannaipuram',
+          address: 'Main Road, Pannaipuram, Theni District, Tamil Nadu',
+          contact_email: 'admin@ghsspannaipuram.edu',
+          admin_id: 'usr_pssofttech',
+        };
+        changed = true;
+      }
+    }
+
+    // Guarantee default institutions are present
+    for (const defSch of DEFAULT_SCHOOLS) {
+      if (!parsed.some((s) => s.id === defSch.id)) {
+        parsed.unshift(defSch);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      localStorage.setItem(DB_SCHOOLS_KEY, JSON.stringify(parsed));
+    }
+    return parsed;
+  }
+
+  static getSchoolById(id: string): School | undefined {
+    return this.getSchools().find((s) => s.id === id);
+  }
+
+  static getSchoolByCode(code: string): School | undefined {
+    const clean = (code || '').trim().toUpperCase();
+    return this.getSchools().find((s) => (s.code || '').trim().toUpperCase() === clean);
+  }
+
+  static saveSchools(schools: School[]): void {
+    localStorage.setItem(DB_SCHOOLS_KEY, JSON.stringify(schools));
+  }
+
+  static registerSchool(data: {
+    name: string;
+    code: string;
+    address?: string;
+    contact_email?: string;
+    storage_quota_bytes?: number;
+    admin_id?: string;
+  }): School {
+    const schools = this.getSchools();
+    const cleanCode = data.code.trim().toUpperCase();
+    const existing = schools.find((s) => s.code.toUpperCase() === cleanCode);
+    if (existing) {
+      throw new Error(`A school with code "${cleanCode}" is already registered (${existing.name}).`);
+    }
+
+    const newId = 'SCH_' + cleanCode.replace(/[^A-Z0-9]/g, '_') + '_' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    const newSchool: School = {
+      id: newId,
+      code: cleanCode,
+      name: data.name.trim(),
+      address: data.address?.trim() || '',
+      contact_email: data.contact_email?.trim() || '',
+      created_at: new Date().toISOString(),
+      storage_quota_bytes: data.storage_quota_bytes || 214748364800, // default 200 GB
+      admin_id: data.admin_id,
+    };
+
+    schools.push(newSchool);
+    this.saveSchools(schools);
+    return newSchool;
+  }
+
+  static updateSchool(schoolId: string, updates: Partial<School>): School {
+    const schools = this.getSchools();
+    const index = schools.findIndex((s) => s.id === schoolId);
+    if (index === -1) {
+      throw new Error(`School with ID "${schoolId}" not found.`);
+    }
+
+    // Check code collision if code updated
+    if (updates.code) {
+      const cleanCode = updates.code.trim().toUpperCase();
+      const collision = schools.find((s) => s.id !== schoolId && s.code.toUpperCase() === cleanCode);
+      if (collision) {
+        throw new Error(`School code "${cleanCode}" is already in use by "${collision.name}".`);
+      }
+      updates.code = cleanCode;
+    }
+
+    schools[index] = {
+      ...schools[index],
+      ...updates,
+    };
+    this.saveSchools(schools);
+
+    // Sync school name/code to existing user profiles belonging to this school
+    const users = this.getUsers();
+    let usersUpdated = false;
+    for (const u of users) {
+      if (u.schoolId === schoolId) {
+        if (updates.name) u.school_name = updates.name;
+        if (updates.code) u.school_code = updates.code;
+        usersUpdated = true;
+      }
+    }
+    if (usersUpdated) {
+      this.saveUsers(users);
+    }
+
+    return schools[index];
+  }
+
   static getUsers(): User[] {
     const raw = localStorage.getItem(DB_USERS_KEY);
     let users: User[];
@@ -372,7 +566,7 @@ export class LocalStore {
       }
     }
 
-    // Auto-migrate: enforce ONLY ONE Master Admin (pssofttech@gmail.com) and multi-user teachers
+    // Auto-migrate: enforce school assignment & roles
     let modified = false;
 
     // Filter out obsolete separate admin account if present
@@ -382,7 +576,31 @@ export class LocalStore {
       modified = true;
     }
 
-    // Ensure pssofttech exists and is the SOLE Master Admin
+    // Filter out Riverside users
+    if (
+      users.some(
+        (u) =>
+          u.id === 'usr_riverside_admin' ||
+          u.id === 'usr_riverside_teacher' ||
+          u.schoolId === 'SCH_RIVERSIDE' ||
+          u.school_code === 'RIVER-202' ||
+          (u.email || '').toLowerCase() === 'admin@riverside.edu' ||
+          (u.email || '').toLowerCase() === 'clara@riverside.edu'
+      )
+    ) {
+      users = users.filter(
+        (u) =>
+          u.id !== 'usr_riverside_admin' &&
+          u.id !== 'usr_riverside_teacher' &&
+          u.schoolId !== 'SCH_RIVERSIDE' &&
+          u.school_code !== 'RIVER-202' &&
+          (u.email || '').toLowerCase() !== 'admin@riverside.edu' &&
+          (u.email || '').toLowerCase() !== 'clara@riverside.edu'
+      );
+      modified = true;
+    }
+
+    // Ensure pssofttech exists as State Admin for Govt Hr Sec School Pannaipuram
     let adminUser = users.find(
       (u) =>
         u.id === 'usr_pssofttech' ||
@@ -393,18 +611,31 @@ export class LocalStore {
     if (!adminUser) {
       adminUser = {
         id: 'usr_pssofttech',
+        schoolId: 'SCH_PANNAIPURAM',
+        school_name: 'Govt Hr Sec School Pannaipuram',
+        school_code: 'STATE-405',
         username: 'pssofttech',
         email: 'pssofttech@gmail.com',
         role: 'admin',
         status: 'active',
         department: 'Computer Science & System Administration',
         storage_used: 412500000,
-        storage_limit: 107374182400, // 100 GB Master Admin pool
+        storage_limit: 107374182400, // 100 GB State Admin pool
         created_at: '2026-02-15T11:00:00.000Z',
       };
       users.unshift(adminUser);
       modified = true;
     } else {
+      if (
+        adminUser.schoolId !== 'SCH_PANNAIPURAM' ||
+        adminUser.school_code !== 'STATE-405' ||
+        adminUser.school_name !== 'Govt Hr Sec School Pannaipuram'
+      ) {
+        adminUser.schoolId = 'SCH_PANNAIPURAM';
+        adminUser.school_name = 'Govt Hr Sec School Pannaipuram';
+        adminUser.school_code = 'STATE-405';
+        modified = true;
+      }
       if (adminUser.role !== 'admin') {
         adminUser.role = 'admin';
         modified = true;
@@ -423,7 +654,7 @@ export class LocalStore {
       }
     }
 
-    // Ensure vadivubichem exists as a Multi-User Teacher account (NO admin rights)
+    // Ensure vadivubichem exists as a State Teacher in Govt Hr Sec School Pannaipuram
     let vadivuUser = users.find(
       (u) =>
         u.id === 'usr_vadivubichem' ||
@@ -436,20 +667,32 @@ export class LocalStore {
     if (!vadivuUser) {
       vadivuUser = {
         id: 'usr_vadivubichem',
+        schoolId: 'SCH_PANNAIPURAM',
+        school_name: 'Govt Hr Sec School Pannaipuram',
+        school_code: 'STATE-405',
         username: 'vadivubichem',
         email: 'vadivubichem@gmail.com',
         role: 'teacher',
         status: 'active',
         department: 'Biochemistry Department',
         storage_used: 356200000,
-        storage_limit: 16106127360, // 15 GB multi-user quota
+        storage_limit: 16106127360, // 15 GB
         created_at: '2026-02-22T08:45:00.000Z',
         permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
       };
       users.push(vadivuUser);
       modified = true;
     } else {
-      // Enforce: ONLY ONE admin policy; vadivubichem is a multi-user teacher account
+      if (
+        vadivuUser.schoolId !== 'SCH_PANNAIPURAM' ||
+        vadivuUser.school_code !== 'STATE-405' ||
+        vadivuUser.school_name !== 'Govt Hr Sec School Pannaipuram'
+      ) {
+        vadivuUser.schoolId = 'SCH_PANNAIPURAM';
+        vadivuUser.school_name = 'Govt Hr Sec School Pannaipuram';
+        vadivuUser.school_code = 'STATE-405';
+        modified = true;
+      }
       if (vadivuUser.role !== 'teacher') {
         vadivuUser.role = 'teacher';
         modified = true;
@@ -468,24 +711,23 @@ export class LocalStore {
       }
     }
 
-    // Ensure ALL other accounts strictly have role: 'teacher' and NO admin rights
+    // Ensure all users have schoolId & school metadata populated
+    const schools = this.getSchools();
     for (const u of users) {
-      const isMasterAdmin =
-        (u.email || '').toLowerCase() === 'pssofttech@gmail.com' ||
-        u.id === 'usr_pssofttech';
-
-      if (!isMasterAdmin) {
-        if (u.role !== 'teacher') {
-          u.role = 'teacher';
+      if (!u.schoolId || u.schoolId === 'SCH_CENTRAL') {
+        u.schoolId = 'SCH_PANNAIPURAM';
+        u.school_name = 'Govt Hr Sec School Pannaipuram';
+        u.school_code = 'STATE-405';
+        modified = true;
+      }
+      const school = schools.find((s) => s.id === u.schoolId);
+      if (school) {
+        if (!u.school_name || u.school_name !== school.name) {
+          u.school_name = school.name;
           modified = true;
         }
-        if (!u.permissions) {
-          u.permissions = { ...DEFAULT_TEACHER_PERMISSIONS };
-          modified = true;
-        }
-      } else {
-        if (u.role !== 'admin') {
-          u.role = 'admin';
+        if (!u.school_code || u.school_code !== school.code) {
+          u.school_code = school.code;
           modified = true;
         }
       }
@@ -513,15 +755,37 @@ export class LocalStore {
 
   static getFiles(): TeachingFile[] {
     const raw = localStorage.getItem(DB_FILES_KEY);
+    let files: TeachingFile[];
     if (!raw) {
-      localStorage.setItem(DB_FILES_KEY, JSON.stringify(INITIAL_FILES));
-      return INITIAL_FILES;
+      files = [...INITIAL_FILES];
+      localStorage.setItem(DB_FILES_KEY, JSON.stringify(files));
+      return files;
     }
     try {
-      return JSON.parse(raw);
+      files = JSON.parse(raw);
     } catch {
-      return INITIAL_FILES;
+      files = [...INITIAL_FILES];
     }
+
+    let changed = false;
+
+    // Filter out Riverside files
+    if (files.some((f) => f.schoolId === 'SCH_RIVERSIDE' || f.id.includes('riverside'))) {
+      files = files.filter((f) => f.schoolId !== 'SCH_RIVERSIDE' && !f.id.includes('riverside'));
+      changed = true;
+    }
+
+    // Migration: ensure every file has schoolId SCH_PANNAIPURAM if SCH_CENTRAL or missing
+    for (const f of files) {
+      if (!f.schoolId || f.schoolId === 'SCH_CENTRAL') {
+        f.schoolId = 'SCH_PANNAIPURAM';
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.saveFiles(files);
+    }
+    return files;
   }
 
   static saveFiles(files: TeachingFile[]): void {
@@ -530,15 +794,37 @@ export class LocalStore {
 
   static getFolders(): Folder[] {
     const raw = localStorage.getItem(DB_FOLDERS_KEY);
+    let folders: Folder[];
     if (!raw) {
-      localStorage.setItem(DB_FOLDERS_KEY, JSON.stringify(INITIAL_FOLDERS));
-      return INITIAL_FOLDERS;
+      folders = [...INITIAL_FOLDERS];
+      localStorage.setItem(DB_FOLDERS_KEY, JSON.stringify(folders));
+      return folders;
     }
     try {
-      return JSON.parse(raw);
+      folders = JSON.parse(raw);
     } catch {
-      return INITIAL_FOLDERS;
+      folders = [...INITIAL_FOLDERS];
     }
+
+    let changed = false;
+
+    // Filter out Riverside folders
+    if (folders.some((fld) => fld.schoolId === 'SCH_RIVERSIDE' || fld.id.includes('riverside'))) {
+      folders = folders.filter((fld) => fld.schoolId !== 'SCH_RIVERSIDE' && !fld.id.includes('riverside'));
+      changed = true;
+    }
+
+    // Migration: ensure every folder has schoolId SCH_PANNAIPURAM if SCH_CENTRAL or missing
+    for (const fld of folders) {
+      if (!fld.schoolId || fld.schoolId === 'SCH_CENTRAL') {
+        fld.schoolId = 'SCH_PANNAIPURAM';
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.saveFolders(folders);
+    }
+    return folders;
   }
 
   static saveFolders(folders: Folder[]): void {
@@ -547,10 +833,12 @@ export class LocalStore {
 
   static getAuditLogs(): AuditLog[] {
     const raw = localStorage.getItem(DB_LOGS_KEY);
+    let logs: AuditLog[];
     if (!raw) {
       const initialLogs: AuditLog[] = [
         {
           id: 'log_01',
+          schoolId: 'SCH_PANNAIPURAM',
           user_id: 'usr_vadivubichem',
           username: 'vadivubichem',
           action: 'MOBILE_UPLOAD',
@@ -563,6 +851,7 @@ export class LocalStore {
         },
         {
           id: 'log_02',
+          schoolId: 'SCH_PANNAIPURAM',
           user_id: 'usr_vasisoft',
           username: 'vasisoft',
           action: 'MOVE_FILE',
@@ -575,6 +864,7 @@ export class LocalStore {
         },
         {
           id: 'log_03',
+          schoolId: 'SCH_PANNAIPURAM',
           user_id: 'usr_pssofttech',
           username: 'pssofttech',
           action: 'RENAME_FILE',
@@ -587,6 +877,7 @@ export class LocalStore {
         },
         {
           id: 'log_04',
+          schoolId: 'SCH_PANNAIPURAM',
           user_id: 'usr_vadivubichem',
           username: 'vadivubichem',
           action: 'DESKTOP_UPLOAD',
@@ -599,6 +890,7 @@ export class LocalStore {
         },
         {
           id: 'log_05',
+          schoolId: 'SCH_PANNAIPURAM',
           user_id: 'usr_emal',
           username: 'emal',
           action: 'MOVE_TO_TRASH',
@@ -611,6 +903,7 @@ export class LocalStore {
         },
         {
           id: 'log_06',
+          schoolId: 'SCH_PANNAIPURAM',
           user_id: 'usr_emal',
           username: 'emal',
           action: 'BATCH_MOVE_FILES',
@@ -623,6 +916,7 @@ export class LocalStore {
         },
         {
           id: 'log_07',
+          schoolId: 'SCH_PANNAIPURAM',
           user_id: 'usr_pssofttech',
           username: 'pssofttech',
           action: 'CREATE_FOLDER',
@@ -635,8 +929,9 @@ export class LocalStore {
         },
         {
           id: 'log_08',
-          user_id: 'usr_admin',
-          username: 'admin',
+          schoolId: 'SCH_PANNAIPURAM',
+          user_id: 'usr_pssofttech',
+          username: 'pssofttech',
           action: 'DELETE_FILE_PERMANENT',
           target_type: 'file',
           target_name: 'Temporary_Upload_Scan_Temp.bin',
@@ -647,6 +942,7 @@ export class LocalStore {
         },
         {
           id: 'log_09',
+          schoolId: 'SCH_PANNAIPURAM',
           user_id: 'usr_emal',
           username: 'emal',
           action: 'DESKTOP_UPLOAD',
@@ -659,6 +955,7 @@ export class LocalStore {
         },
         {
           id: 'log_10',
+          schoolId: 'SCH_PANNAIPURAM',
           user_id: 'usr_vadivubichem',
           username: 'vadivubichem',
           action: 'LOGIN',
@@ -674,16 +971,32 @@ export class LocalStore {
       return initialLogs;
     }
     try {
-      return JSON.parse(raw);
+      logs = JSON.parse(raw);
     } catch {
       return [];
     }
+
+    let changed = false;
+    for (const lg of logs) {
+      if (!lg.schoolId || lg.schoolId === 'SCH_CENTRAL') {
+        lg.schoolId = 'SCH_PANNAIPURAM';
+        changed = true;
+      }
+    }
+    if (changed) {
+      localStorage.setItem(DB_LOGS_KEY, JSON.stringify(logs));
+    }
+    return logs;
   }
 
-  static addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): void {
+  static addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'> & { schoolId?: string }): void {
     const logs = this.getAuditLogs();
+    const sessionUser = this.getSessionUser();
+    const schoolId = log.schoolId || sessionUser?.schoolId || 'SCH_PANNAIPURAM';
+
     const newLog: AuditLog = {
       ...log,
+      schoolId,
       id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       timestamp: new Date().toISOString(),
     };

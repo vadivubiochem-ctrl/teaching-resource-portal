@@ -10,8 +10,9 @@ import {
   AuthenticatedRequest,
   requireAuth,
   requireAdmin,
+  validateTenantSchoolMiddleware,
 } from './auth.js';
-import type { TeachingFile, FileCategory, Folder, SharingRecord } from '../src/types.js';
+import type { TeachingFile, FileCategory, Folder, SharingRecord, School } from '../src/types.js';
 
 const router = Router();
 
@@ -74,16 +75,33 @@ function sanitizeUser(user: StoredUser) {
 // ---------------- AUTH ROUTES ----------------
 
 router.post('/auth/login', (req, res) => {
-  const { identifier, password, device } = req.body;
+  const { identifier, password, device, schoolId, schoolCode } = req.body;
 
   if (!identifier || !password) {
     res.status(400).json({ error: 'Username/Email and Password are required.' });
     return;
   }
 
-  const user = db.getUserByEmailOrUsername(identifier);
+  // Resolve target school if provided
+  let targetSchoolId: string | undefined;
+  if (schoolCode) {
+    const school = db.getSchoolByCode(schoolCode);
+    if (!school) {
+      res.status(404).json({ error: `No institution found with school code "${schoolCode}".` });
+      return;
+    }
+    targetSchoolId = school.id;
+  } else if (schoolId) {
+    targetSchoolId = schoolId;
+  }
+
+  const user = db.getUserByEmailOrUsername(identifier, targetSchoolId);
   if (!user) {
-    res.status(401).json({ error: 'Invalid credentials. User not found.' });
+    if (targetSchoolId) {
+      res.status(401).json({ error: 'Invalid credentials or user does not belong to the specified school institution.' });
+    } else {
+      res.status(401).json({ error: 'Invalid credentials. User not found.' });
+    }
     return;
   }
 
@@ -102,11 +120,12 @@ router.post('/auth/login', (req, res) => {
   const token = createSessionToken(user.id);
 
   db.addAuditLog({
+    schoolId: user.schoolId || 'SCH_PANNAIPURAM',
     user_id: user.id,
     username: user.username,
     action: 'LOGIN',
     target_type: 'auth',
-    target_name: `Successful login via ${clientDevice}`,
+    target_name: `Successful login via ${clientDevice} (${user.school_name || 'Govt Hr Sec School Pannaipuram'})`,
     device: clientDevice,
     ip: req.ip || '127.0.0.1',
   });
@@ -115,6 +134,68 @@ router.post('/auth/login', (req, res) => {
     token,
     user: sanitizeUser(user),
   });
+});
+
+router.post('/auth/register', (req, res) => {
+  const { username, email, password, role, department, schoolId, schoolCode, schoolName } = req.body;
+  if (!username || !email || !password) {
+    res.status(400).json({ error: 'Username, email and password are required.' });
+    return;
+  }
+
+  let finalSchoolId = schoolId;
+  let finalSchoolName = schoolName;
+  let finalSchoolCode = schoolCode;
+
+  if (schoolCode) {
+    const school = db.getSchoolByCode(schoolCode);
+    if (school) {
+      finalSchoolId = school.id;
+      finalSchoolName = school.name;
+      finalSchoolCode = school.code;
+    } else {
+      finalSchoolId = schoolCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '_');
+      finalSchoolName = schoolName || `${finalSchoolId} Academy`;
+      finalSchoolCode = finalSchoolId;
+      db.createSchool({
+        id: finalSchoolId,
+        name: finalSchoolName,
+        code: finalSchoolCode,
+        storage_quota_bytes: 214748364800,
+        created_at: new Date().toISOString(),
+      });
+    }
+  } else if (!finalSchoolId) {
+    finalSchoolId = 'SCH_PANNAIPURAM';
+    finalSchoolName = 'Govt Hr Sec School Pannaipuram';
+    finalSchoolCode = 'STATE-405';
+  }
+
+  if (db.getUserByEmailOrUsername(email, finalSchoolId) || db.getUserByEmailOrUsername(username, finalSchoolId)) {
+    res.status(400).json({ error: 'A user with this username or email already exists in this school.' });
+    return;
+  }
+
+  const salt = bcrypt.genSaltSync(10);
+  const newUser: StoredUser = {
+    id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+    schoolId: finalSchoolId,
+    school_name: finalSchoolName,
+    school_code: finalSchoolCode,
+    username: username.trim(),
+    email: email.trim().toLowerCase(),
+    password_hash: bcrypt.hashSync(password, salt),
+    role: role === 'admin' ? 'admin' : 'teacher',
+    status: 'active',
+    department: department || 'General Education',
+    storage_used: 0,
+    storage_limit: 15 * 1024 * 1024 * 1024,
+    created_at: new Date().toISOString(),
+  };
+
+  db.createUser(newUser);
+  const token = createSessionToken(newUser.id);
+  res.status(201).json({ token, user: sanitizeUser(newUser) });
 });
 
 router.post('/auth/logout', requireAuth, (req: AuthenticatedRequest, res) => {
@@ -207,9 +288,10 @@ router.post('/auth/reset-password', (req, res) => {
 
 // ---------------- FILES ROUTES ----------------
 
-router.get('/files', requireAuth, (req: AuthenticatedRequest, res) => {
+router.get('/files', requireAuth, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
   const user = req.user!;
-  let files = db.getUserFiles(user.id, user.role);
+  const schoolId = req.schoolId || user.schoolId || 'SCH_PANNAIPURAM';
+  let files = db.getUserFiles(user.id, user.role, schoolId);
 
   const { type, folderId, favorite, recent, trash, search } = req.query;
 
@@ -257,7 +339,7 @@ router.get('/files', requireAuth, (req: AuthenticatedRequest, res) => {
   res.json({ files });
 });
 
-function getOrCreateVirtualCategoryFolder(userId: string, category: string): { id: string; name: string } {
+function getOrCreateVirtualCategoryFolder(userId: string, category: string, schoolId: string = 'SCH_PANNAIPURAM'): { id: string; name: string } {
   const categoryMap: Record<string, { name: string; color: string }> = {
     document: { name: 'Documents', color: '#3B82F6' },
     image: { name: 'Images', color: '#8B5CF6' },
@@ -267,7 +349,7 @@ function getOrCreateVirtualCategoryFolder(userId: string, category: string): { i
   };
 
   const config = categoryMap[category] || categoryMap.document;
-  const folders = db.getFolders();
+  const folders = db.getFolders(schoolId);
   let folder = folders.find(f => f.user_id === userId && f.folder_name.toLowerCase() === config.name.toLowerCase());
   if (!folder) {
     folder = folders.find(f => f.folder_name.toLowerCase() === config.name.toLowerCase());
@@ -276,6 +358,7 @@ function getOrCreateVirtualCategoryFolder(userId: string, category: string): { i
   if (!folder) {
     const newFld: Folder = {
       id: 'fld_' + config.name.toLowerCase() + '_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      schoolId,
       user_id: userId,
       parent_folder_id: null,
       folder_name: config.name,
@@ -290,8 +373,9 @@ function getOrCreateVirtualCategoryFolder(userId: string, category: string): { i
   return { id: folder.id, name: folder.folder_name };
 }
 
-router.post('/files/upload', requireAuth, upload.array('files'), (req: AuthenticatedRequest, res: Response) => {
+router.post('/files/upload', requireAuth, validateTenantSchoolMiddleware, upload.array('files'), (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!;
+  const schoolId = req.schoolId || user.schoolId || 'SCH_PANNAIPURAM';
   const files = req.files as Express.Multer.File[];
   const folderId = req.body.folder_id ? String(req.body.folder_id) : null;
   const clientDevice = req.body.device || detectDevice(req);
@@ -311,7 +395,7 @@ router.post('/files/upload', requireAuth, upload.array('files'), (req: Authentic
     let targetFolderId = folderId === 'root' || !folderId ? null : folderId;
     let targetFolderName = 'Root Directory';
     if (!targetFolderId) {
-      const virtualFolder = getOrCreateVirtualCategoryFolder(user.id, category);
+      const virtualFolder = getOrCreateVirtualCategoryFolder(user.id, category, schoolId);
       targetFolderId = virtualFolder.id;
       targetFolderName = virtualFolder.name;
     }
@@ -323,6 +407,7 @@ router.post('/files/upload', requireAuth, upload.array('files'), (req: Authentic
 
     const newFile: TeachingFile = {
       id: 'fil_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      schoolId,
       user_id: user.id,
       folder_id: targetFolderId,
       file_name: f.originalname,
@@ -346,6 +431,7 @@ router.post('/files/upload', requireAuth, upload.array('files'), (req: Authentic
     uploadedFiles.push(newFile);
 
     db.addAuditLog({
+      schoolId,
       user_id: user.id,
       username: user.username,
       action: 'AUTO_CATEGORIZE_UPLOAD',
@@ -537,12 +623,13 @@ router.post('/files/:id/copy', requireAuth, (req: AuthenticatedRequest, res) => 
 
 // ---------------- FOLDER ROUTES ----------------
 
-router.get('/folders', requireAuth, (req: AuthenticatedRequest, res) => {
+router.get('/folders', requireAuth, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
   const user = req.user!;
-  const folders = db.getUserFolders(user.id, user.role);
+  const schoolId = req.schoolId || user.schoolId || 'SCH_PANNAIPURAM';
+  const folders = db.getUserFolders(user.id, user.role, schoolId);
 
-  // Compute file count per folder
-  const allFiles = db.getFiles().filter(f => !f.is_trashed);
+  // Compute file count per folder scoped to this school
+  const allFiles = db.getFiles(schoolId).filter(f => !f.is_trashed);
   const foldersWithCounts = folders.map(f => ({
     ...f,
     file_count: allFiles.filter(item => item.folder_id === f.id).length,
@@ -551,8 +638,9 @@ router.get('/folders', requireAuth, (req: AuthenticatedRequest, res) => {
   res.json({ folders: foldersWithCounts });
 });
 
-router.post('/folders', requireAuth, (req: AuthenticatedRequest, res) => {
+router.post('/folders', requireAuth, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
   const user = req.user!;
+  const schoolId = req.schoolId || user.schoolId || 'SCH_PANNAIPURAM';
   const { folder_name, parent_folder_id, color } = req.body;
 
   if (!folder_name || folder_name.trim().length === 0) {
@@ -565,6 +653,7 @@ router.post('/folders', requireAuth, (req: AuthenticatedRequest, res) => {
 
   const newFolder: Folder = {
     id: 'fld_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+    schoolId,
     user_id: user.id,
     parent_folder_id: parent_folder_id === 'root' || !parent_folder_id ? null : parent_folder_id,
     folder_name: folder_name.trim(),
@@ -575,6 +664,7 @@ router.post('/folders', requireAuth, (req: AuthenticatedRequest, res) => {
   db.createFolder(newFolder);
 
   db.addAuditLog({
+    schoolId,
     user_id: user.id,
     username: user.username,
     action: 'CREATE_FOLDER',
@@ -587,12 +677,17 @@ router.post('/folders', requireAuth, (req: AuthenticatedRequest, res) => {
   res.status(201).json({ folder: newFolder });
 });
 
-router.patch('/folders/:id', requireAuth, (req: AuthenticatedRequest, res) => {
+router.patch('/folders/:id', requireAuth, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
   const user = req.user!;
   const folder = db.getFolders().find(f => f.id === req.params.id);
 
   if (!folder) {
     res.status(404).json({ error: 'Folder not found.' });
+    return;
+  }
+
+  if (folder.schoolId && req.schoolId && folder.schoolId !== req.schoolId) {
+    res.status(403).json({ error: 'Cross-Institutional Access Denied.' });
     return;
   }
 
@@ -612,12 +707,17 @@ router.patch('/folders/:id', requireAuth, (req: AuthenticatedRequest, res) => {
   res.json({ folder: updated });
 });
 
-router.delete('/folders/:id', requireAuth, (req: AuthenticatedRequest, res) => {
+router.delete('/folders/:id', requireAuth, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
   const user = req.user!;
   const folder = db.getFolders().find(f => f.id === req.params.id);
 
   if (!folder) {
     res.status(404).json({ error: 'Folder not found.' });
+    return;
+  }
+
+  if (folder.schoolId && req.schoolId && folder.schoolId !== req.schoolId) {
+    res.status(403).json({ error: 'Cross-Institutional Access Denied.' });
     return;
   }
 
@@ -632,19 +732,25 @@ router.delete('/folders/:id', requireAuth, (req: AuthenticatedRequest, res) => {
 
 // ---------------- SHARING ROUTES ----------------
 
-router.get('/sharing', requireAuth, (req: AuthenticatedRequest, res) => {
+router.get('/sharing', requireAuth, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
   const fileId = req.query.fileId as string | undefined;
   const records = db.getSharingRecords(fileId);
   res.json({ sharing: records });
 });
 
-router.post('/sharing', requireAuth, (req: AuthenticatedRequest, res) => {
+router.post('/sharing', requireAuth, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
   const user = req.user!;
+  const schoolId = req.schoolId || user.schoolId || 'SCH_PANNAIPURAM';
   const { file_id, shared_user_id, permission, shared_mode } = req.body;
 
   const file = db.getFileById(file_id);
   if (!file) {
     res.status(404).json({ error: 'File not found.' });
+    return;
+  }
+
+  if (file.schoolId && file.schoolId !== schoolId) {
+    res.status(403).json({ error: 'Cross-Institutional Access Denied: Cannot share file outside your school.' });
     return;
   }
 
@@ -658,9 +764,14 @@ router.post('/sharing', requireAuth, (req: AuthenticatedRequest, res) => {
   }
 
   if (shared_user_id) {
-    const targetUser = db.getUserById(shared_user_id) || db.getUserByEmailOrUsername(shared_user_id);
+    const targetUser = db.getUserById(shared_user_id) || db.getUserByEmailOrUsername(shared_user_id, schoolId);
     if (!targetUser) {
-      res.status(404).json({ error: 'Target teacher account not found.' });
+      res.status(404).json({ error: 'Target teacher account not found in this institution.' });
+      return;
+    }
+
+    if (targetUser.schoolId && targetUser.schoolId !== schoolId) {
+      res.status(403).json({ error: 'Cross-Institutional Access Denied: Cannot share file with teachers outside your school.' });
       return;
     }
 
@@ -683,18 +794,20 @@ router.post('/sharing', requireAuth, (req: AuthenticatedRequest, res) => {
   res.json({ success: true, shared_mode });
 });
 
-router.delete('/sharing/:id', requireAuth, (_req, res) => {
+router.delete('/sharing/:id', requireAuth, validateTenantSchoolMiddleware, (_req, res) => {
   db.removeSharingRecord(_req.params.id);
   res.json({ success: true });
 });
 
 // ---------------- STATS & DASHBOARD ----------------
 
-router.get('/stats', requireAuth, (req: AuthenticatedRequest, res) => {
+router.get('/stats', requireAuth, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
   const user = req.user!;
-  const allFiles = db.getFiles().filter(f => !f.is_trashed);
+  const schoolId = req.schoolId || user.schoolId || 'SCH_PANNAIPURAM';
+  const allFiles = db.getFiles(schoolId).filter(f => !f.is_trashed);
   const userFiles = user.role === 'admin' ? allFiles : allFiles.filter(f => f.user_id === user.id);
-  const allFolders = db.getUserFolders(user.id, user.role);
+  const allFolders = db.getUserFolders(user.id, user.role, schoolId);
+  const schoolUsers = db.getUsers(schoolId);
 
   const videos = userFiles.filter(f => f.file_type === 'video').length;
   const audio = userFiles.filter(f => f.file_type === 'audio').length;
@@ -709,8 +822,9 @@ router.get('/stats', requireAuth, (req: AuthenticatedRequest, res) => {
   const todayUploads = userFiles.filter(f => new Date(f.uploaded_at).getTime() >= startOfDay).length;
 
   res.json({
-    totalUsers: db.getUsers().length,
-    activeUsers: db.getUsers().filter(u => u.status === 'active').length,
+    schoolId,
+    totalUsers: schoolUsers.length,
+    activeUsers: schoolUsers.filter(u => u.status === 'active').length,
     totalFiles: userFiles.length,
     totalFolders: allFolders.length,
     totalVideos: videos,
@@ -724,12 +838,157 @@ router.get('/stats', requireAuth, (req: AuthenticatedRequest, res) => {
   });
 });
 
-// ---------------- ADMIN ROUTES ----------------
+// ---------------- INSTITUTIONAL MANAGEMENT ROUTES ----------------
 
-router.get('/admin/dashboard', requireAdmin, (_req, res) => {
-  const allFiles = db.getFiles();
+router.get('/schools', (req, res) => {
+  const schools = db.getSchools();
+  res.json({ schools });
+});
+
+router.get('/schools/current', requireAuth, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
+  const schoolId = req.schoolId || req.user?.schoolId || 'SCH_PANNAIPURAM';
+  const school = db.getSchoolById(schoolId) || {
+    id: schoolId,
+    name: 'Govt Hr Sec School Pannaipuram',
+    code: 'SCH_PANNAIPURAM',
+    storage_quota_bytes: 214748364800,
+    created_at: new Date().toISOString(),
+  };
+  res.json({ school });
+});
+
+router.post('/schools', requireAuth, requireAdmin, (req: AuthenticatedRequest, res) => {
+  const { name, code, address, contact_email, storage_quota_bytes } = req.body;
+  if (!name || !code) {
+    res.status(400).json({ error: 'School name and unique school code are required.' });
+    return;
+  }
+
+  const cleanCode = String(code).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '_');
+  const existing = db.getSchoolByCode(cleanCode);
+  if (existing) {
+    res.status(400).json({ error: `A school with code "${cleanCode}" is already registered.` });
+    return;
+  }
+
+  const newSchool: School = {
+    id: cleanCode,
+    name: String(name).trim(),
+    code: cleanCode,
+    address: address ? String(address).trim() : undefined,
+    contact_email: contact_email ? String(contact_email).trim().toLowerCase() : undefined,
+    storage_quota_bytes: storage_quota_bytes ? Number(storage_quota_bytes) : 214748364800,
+    created_at: new Date().toISOString(),
+  };
+
+  db.createSchool(newSchool);
+
+  db.addAuditLog({
+    schoolId: newSchool.id,
+    user_id: req.user!.id,
+    username: req.user!.username,
+    action: 'REGISTER_SCHOOL',
+    target_type: 'auth',
+    target_name: `Registered new institution: ${newSchool.name} (${newSchool.code})`,
+    device: detectDevice(req),
+    ip: req.ip || '127.0.0.1',
+    details: `Tenant created with ${((newSchool.storage_quota_bytes || 0) / (1024 * 1024 * 1024)).toFixed(0)} GB quota.`,
+  });
+
+  res.status(201).json({ school: newSchool });
+});
+
+router.patch('/schools/:id', requireAuth, requireAdmin, (req: AuthenticatedRequest, res) => {
+  const schoolId = req.params.id;
+  const school = db.getSchoolById(schoolId);
+  if (!school) {
+    res.status(404).json({ error: 'School not found.' });
+    return;
+  }
+
+  const updates: Partial<School> = {};
+  if (req.body.name) updates.name = String(req.body.name).trim();
+  if (req.body.address !== undefined) updates.address = String(req.body.address).trim();
+  if (req.body.contact_email !== undefined) updates.contact_email = String(req.body.contact_email).trim();
+  if (req.body.storage_quota_bytes !== undefined) updates.storage_quota_bytes = Number(req.body.storage_quota_bytes);
+
+  const updated = db.updateSchool(school.id, updates);
+
+  db.addAuditLog({
+    schoolId: school.id,
+    user_id: req.user!.id,
+    username: req.user!.username,
+    action: 'UPDATE_SCHOOL_SETTINGS',
+    target_type: 'auth',
+    target_name: `Updated settings for ${updated?.name}`,
+    device: detectDevice(req),
+    ip: req.ip || '127.0.0.1',
+  });
+
+  res.json({ school: updated });
+});
+
+router.get('/schools/analytics', requireAuth, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
+  const schoolId = req.schoolId || req.user?.schoolId || 'SCH_PANNAIPURAM';
+  const school = db.getSchoolById(schoolId) || {
+    id: schoolId,
+    name: 'Govt Hr Sec School Pannaipuram',
+    code: 'SCH_PANNAIPURAM',
+    storage_quota_bytes: 214748364800,
+    created_at: new Date().toISOString(),
+  };
+
+  const teachers = db.getUsers(schoolId);
+  const files = db.getFiles(schoolId).filter(f => !f.is_trashed);
+  const folders = db.getFolders(schoolId);
+  const totalStorageUsed = files.reduce((acc, f) => acc + (f.file_size || 0), 0);
+  const quotaBytes = school.storage_quota_bytes || 214748364800;
+
+  // Breakdown by department
+  const departmentsMap: Record<string, { count: number; storage: number }> = {};
+  for (const t of teachers) {
+    const dept = t.department || 'General Education';
+    if (!departmentsMap[dept]) departmentsMap[dept] = { count: 0, storage: 0 };
+    departmentsMap[dept].count += 1;
+    departmentsMap[dept].storage += t.storage_used || 0;
+  }
+
+  const departmentBreakdown = Object.entries(departmentsMap).map(([dept, data]) => ({
+    department: dept,
+    teacherCount: data.count,
+    storageUsedBytes: data.storage,
+  }));
+
+  const mediaBreakdown = {
+    videos: files.filter(f => f.file_type === 'video').length,
+    audios: files.filter(f => f.file_type === 'audio').length,
+    documents: files.filter(f => f.file_type === 'document').length,
+    images: files.filter(f => f.file_type === 'image').length,
+    other: files.filter(f => f.file_type === 'other').length,
+  };
+
+  res.json({
+    school,
+    totalTeachers: teachers.length,
+    activeTeachers: teachers.filter(t => t.status === 'active').length,
+    totalFiles: files.length,
+    totalFolders: folders.length,
+    totalStorageUsed,
+    storageQuotaBytes: quotaBytes,
+    usagePercentage: Math.min(100, (totalStorageUsed / quotaBytes) * 100),
+    departmentBreakdown,
+    mediaBreakdown,
+    recentAuditLogs: db.getAuditLogs(schoolId).slice(0, 10),
+  });
+});
+
+// ---------------- ADMIN ROUTES (SCOPED TO TENANT SCHOOL) ----------------
+
+router.get('/admin/dashboard', requireAdmin, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
+  const schoolId = req.schoolId || req.user?.schoolId || 'SCH_PANNAIPURAM';
+  const allFiles = db.getFiles(schoolId);
   const activeFiles = allFiles.filter(f => !f.is_trashed);
-  const users = db.getUsers().map(sanitizeUser);
+  const users = db.getUsers(schoolId).map(sanitizeUser);
   const totalStorage = activeFiles.reduce((acc, f) => acc + f.file_size, 0);
 
   const now = new Date();
@@ -737,6 +996,7 @@ router.get('/admin/dashboard', requireAdmin, (_req, res) => {
   const todayUploads = allFiles.filter(f => new Date(f.uploaded_at).getTime() >= startOfDay).length;
 
   res.json({
+    schoolId,
     metrics: {
       totalUsers: users.length,
       activeUsers: users.filter(u => u.status === 'active').length,
@@ -748,29 +1008,35 @@ router.get('/admin/dashboard', requireAdmin, (_req, res) => {
       failedUploads: 0,
     },
     users,
-    auditLogs: db.getAuditLogs(),
+    auditLogs: db.getAuditLogs(schoolId),
   });
 });
 
-router.get('/admin/users', requireAdmin, (_req, res) => {
-  res.json({ users: db.getUsers().map(sanitizeUser) });
+router.get('/admin/users', requireAdmin, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
+  const schoolId = req.schoolId || req.user?.schoolId || 'SCH_PANNAIPURAM';
+  res.json({ users: db.getUsers(schoolId).map(sanitizeUser) });
 });
 
-router.post('/admin/users', requireAdmin, (req, res) => {
+router.post('/admin/users', requireAdmin, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
+  const schoolId = req.schoolId || req.user?.schoolId || 'SCH_PANNAIPURAM';
+  const school = db.getSchoolById(schoolId);
   const { username, email, password, role, department, storage_limit } = req.body;
   if (!username || !email || !password) {
     res.status(400).json({ error: 'Username, email and password are required.' });
     return;
   }
 
-  if (db.getUserByEmailOrUsername(email) || db.getUserByEmailOrUsername(username)) {
-    res.status(400).json({ error: 'User with this email or username already exists.' });
+  if (db.getUserByEmailOrUsername(email, schoolId) || db.getUserByEmailOrUsername(username, schoolId)) {
+    res.status(400).json({ error: 'User with this email or username already exists in your school institution.' });
     return;
   }
 
   const salt = bcrypt.genSaltSync(10);
   const newUser: StoredUser = {
     id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+    schoolId,
+    school_name: school?.name || req.user?.school_name || 'Govt Hr Sec School Pannaipuram',
+    school_code: school?.code || req.user?.school_code || 'SCH_PANNAIPURAM',
     username: username.trim(),
     email: email.trim().toLowerCase(),
     password_hash: bcrypt.hashSync(password, salt),
@@ -786,10 +1052,16 @@ router.post('/admin/users', requireAdmin, (req, res) => {
   res.status(201).json({ user: sanitizeUser(newUser) });
 });
 
-router.patch('/admin/users/:id', requireAdmin, (req, res) => {
+router.patch('/admin/users/:id', requireAdmin, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
+  const schoolId = req.schoolId || req.user?.schoolId || 'SCH_PANNAIPURAM';
   const user = db.getUserById(req.params.id);
   if (!user) {
     res.status(404).json({ error: 'User not found.' });
+    return;
+  }
+
+  if (user.schoolId && user.schoolId !== schoolId) {
+    res.status(403).json({ error: 'Cross-Institutional Access Denied: Cannot edit users belonging to another school.' });
     return;
   }
 
@@ -807,7 +1079,19 @@ router.patch('/admin/users/:id', requireAdmin, (req, res) => {
   res.json({ user: sanitizeUser(updated!) });
 });
 
-router.delete('/admin/users/:id', requireAdmin, (req: AuthenticatedRequest, res) => {
+router.delete('/admin/users/:id', requireAdmin, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
+  const schoolId = req.schoolId || req.user?.schoolId || 'SCH_PANNAIPURAM';
+  const user = db.getUserById(req.params.id);
+  if (!user) {
+    res.status(404).json({ error: 'User not found.' });
+    return;
+  }
+
+  if (user.schoolId && user.schoolId !== schoolId) {
+    res.status(403).json({ error: 'Cross-Institutional Access Denied: Cannot delete users belonging to another school.' });
+    return;
+  }
+
   if (req.params.id === req.user?.id) {
     res.status(400).json({ error: 'Cannot delete your own admin account.' });
     return;
@@ -816,8 +1100,9 @@ router.delete('/admin/users/:id', requireAdmin, (req: AuthenticatedRequest, res)
   res.json({ success: true });
 });
 
-router.get('/admin/audit-logs', requireAdmin, (_req, res) => {
-  res.json({ auditLogs: db.getAuditLogs() });
+router.get('/admin/audit-logs', requireAdmin, validateTenantSchoolMiddleware, (req: AuthenticatedRequest, res) => {
+  const schoolId = req.schoolId || req.user?.schoolId || 'SCH_PANNAIPURAM';
+  res.json({ auditLogs: db.getAuditLogs(schoolId) });
 });
 
 export default router;

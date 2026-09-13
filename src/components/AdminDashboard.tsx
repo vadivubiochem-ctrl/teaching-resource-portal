@@ -37,6 +37,7 @@ import {
   Share2,
   Upload,
   Scale,
+  Building2,
 } from 'lucide-react';
 import type { User, AuditLog, TeacherPermissions } from '../types.js';
 import { DEFAULT_TEACHER_PERMISSIONS } from '../types.js';
@@ -44,21 +45,22 @@ import { api } from '../services/api.js';
 import { LocalStore } from '../services/store.js';
 import { formatBytes, formatDate, formatDateTime } from '../utils/formatters.js';
 import { ADMIN_RULES, MULTI_USER_RULES } from '../services/institutionalRules.js';
+import { InstitutionalManagement } from './InstitutionalManagement.js';
 
 interface AdminDashboardProps {
   currentUser: User;
-  initialTab?: 'users' | 'storage' | 'reports' | 'security' | 'rules';
-  onTabChange?: (tab: 'users' | 'storage' | 'reports' | 'security' | 'rules') => void;
+  initialTab?: 'institution' | 'users' | 'storage' | 'reports' | 'security' | 'rules';
+  onTabChange?: (tab: 'institution' | 'users' | 'storage' | 'reports' | 'security' | 'rules') => void;
   onRefreshUser?: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   currentUser,
-  initialTab = 'users',
+  initialTab = 'institution',
   onTabChange,
   onRefreshUser,
 }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'storage' | 'reports' | 'security' | 'rules'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'institution' | 'users' | 'storage' | 'reports' | 'security' | 'rules'>(initialTab);
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<any>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -125,7 +127,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   }, [initialTab]);
 
-  const handleSelectTab = (tab: 'users' | 'storage' | 'reports' | 'security' | 'rules') => {
+  const handleSelectTab = (tab: 'institution' | 'users' | 'storage' | 'reports' | 'security' | 'rules') => {
     setActiveTab(tab);
     if (onTabChange) {
       onTabChange(tab);
@@ -721,6 +723,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       <div className="flex border-b border-slate-800 space-x-2 sm:space-x-4 text-xs font-semibold overflow-x-auto pb-0.5">
         <button
           type="button"
+          id="tab-btn-institution"
+          onClick={() => handleSelectTab('institution')}
+          className={`pb-2.5 px-2 flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap ${
+            activeTab === 'institution'
+              ? 'border-b-2 border-amber-500 text-amber-400 font-bold'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          <span>Institutional Management</span>
+          <span className="px-1.5 py-0.2 rounded-full bg-indigo-950/80 text-[10px] text-indigo-300 border border-indigo-800/80">
+            Multi-Tenant
+          </span>
+        </button>
+
+        <button
+          type="button"
           id="tab-btn-users"
           onClick={() => handleSelectTab('users')}
           className={`pb-2.5 px-2 flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap ${
@@ -801,6 +820,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </span>
         </button>
       </div>
+
+      {/* ========================================================= */}
+      {/* SECTION 0: INSTITUTIONAL MANAGEMENT                       */}
+      {/* ========================================================= */}
+      {activeTab === 'institution' && (
+        <InstitutionalManagement
+          currentUser={currentUser}
+          onRefresh={fetchAdminData}
+        />
+      )}
 
       {/* ========================================================= */}
       {/* SECTION 1: USER MANAGEMENT                                */}

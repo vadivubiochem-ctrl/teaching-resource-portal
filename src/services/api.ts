@@ -7,6 +7,7 @@ import type {
   AuditLog,
   FileCategory,
   TeacherPermissions,
+  School,
 } from '../types.js';
 import { DEFAULT_TEACHER_PERMISSIONS } from '../types.js';
 import {
@@ -17,6 +18,7 @@ import {
   getBlob,
 } from './store.js';
 import { recordFileAccess } from './offlineStorage.js';
+import { onlineDb, fileToBase64 } from './firebase.js';
 
 export function getStoredToken(): string | null {
   return LocalStore.getSessionUser()?.id || null;
@@ -36,6 +38,24 @@ export function getSimulatedDevice(): string {
 
 export function setSimulatedDevice(device: string): void {
   LocalStore.setSimulatedDevice(device);
+}
+
+/**
+ * Institutional Multi-Tenancy Middleware / Validator
+ * Strictly verifies that all queries and mutations are isolated to the active user's assigned schoolId.
+ * Throws an explicit error if cross-school access or mismatched school operations are attempted.
+ */
+export function validateTenantSchoolScope(targetSchoolId?: string, operation: string = 'data operation'): string {
+  const currentUser = LocalStore.getSessionUser();
+  const callerSchoolId = currentUser?.schoolId || 'SCH_PANNAIPURAM';
+
+  if (targetSchoolId && targetSchoolId !== callerSchoolId) {
+    throw new Error(
+      `Cross-Institutional Access Denied: Cannot perform ${operation} across tenant boundaries (Target School: "${targetSchoolId}", Current Account School: "${callerSchoolId}"). Data isolation is strictly enforced.`
+    );
+  }
+
+  return callerSchoolId;
 }
 
 function getFileCategory(filename: string, mimeType: string): FileCategory {
@@ -62,7 +82,7 @@ function getFileCategory(filename: string, mimeType: string): FileCategory {
 
 export const api = {
   // Authentication
-  async login(identifier: string, password: string, device?: string) {
+  async login(identifier: string, password: string, device?: string, selectedSchoolCode?: string) {
     const trimmedId = identifier.trim().toLowerCase();
     const currentDevice = device || getSimulatedDevice();
     const users = LocalStore.getUsers();
@@ -83,7 +103,15 @@ export const api = {
     }
 
     if (user.status === 'suspended') {
-      throw new Error('This account has been suspended by the administrator (pssofttech@gmail.com).');
+      throw new Error('This account has been suspended by the administrator.');
+    }
+
+    // Optional school isolation validation during login
+    if (selectedSchoolCode) {
+      const targetSchool = LocalStore.getSchoolByCode(selectedSchoolCode);
+      if (targetSchool && user.schoolId && user.schoolId !== targetSchool.id) {
+        throw new Error(`Account "${identifier}" does not belong to ${targetSchool.name} (${selectedSchoolCode}). Please select your assigned school.`);
+      }
     }
 
     // Check password: allow valid defined passwords or direct match
@@ -99,13 +127,21 @@ export const api = {
       throw new Error('Invalid password. Please check your credentials or reset your password.');
     }
 
+    // Ensure user has valid schoolId
+    if (!user.schoolId) {
+      user.schoolId = 'SCH_PANNAIPURAM';
+      user.school_name = 'Govt Hr Sec School Pannaipuram';
+      user.school_code = 'STATE-405';
+    }
+
     LocalStore.setSessionUser(user.id);
     LocalStore.addAuditLog({
+      schoolId: user.schoolId,
       user_id: user.id,
       username: user.username,
       action: 'LOGIN',
       target_type: 'auth',
-      target_name: `Successful login via ${currentDevice}`,
+      target_name: `Successful login to ${user.school_name || user.schoolId} via ${currentDevice}`,
       device: currentDevice,
       ip: '127.0.0.1 (Direct)',
     });
@@ -122,9 +158,13 @@ export const api = {
     password: string;
     department?: string;
     device?: string;
+    schoolCode?: string;
+    schoolId?: string;
+    role?: 'admin' | 'teacher';
   }) {
     const currentDevice = data.device || getSimulatedDevice();
     const users = LocalStore.getUsers();
+    const schools = LocalStore.getSchools();
 
     const trimmedUsername = data.username.trim();
     const trimmedEmail = data.email.trim();
@@ -137,26 +177,54 @@ export const api = {
       throw new Error('Password must be at least 4 characters long.');
     }
 
+    // Determine target school
+    let assignedSchool: School | undefined;
+    if (data.schoolCode) {
+      assignedSchool = LocalStore.getSchoolByCode(data.schoolCode);
+      if (!assignedSchool) {
+        throw new Error(`School code "${data.schoolCode}" was not found. Please enter a valid registered school code.`);
+      }
+    } else if (data.schoolId) {
+      assignedSchool = LocalStore.getSchoolById(data.schoolId);
+    }
+
+    if (!assignedSchool) {
+      // Default to Govt Hr Sec School Pannaipuram
+      assignedSchool = schools[0] || {
+        id: 'SCH_PANNAIPURAM',
+        code: 'STATE-405',
+        name: 'Govt Hr Sec School Pannaipuram',
+        address: 'Main Road, Pannaipuram, Theni District, Tamil Nadu',
+        created_at: new Date().toISOString(),
+        storage_quota_bytes: 214748364800,
+      };
+    }
+
     const duplicate = users.find(
       (u) =>
-        u.email.toLowerCase() === trimmedEmail.toLowerCase() ||
-        u.username.toLowerCase() === trimmedUsername.toLowerCase()
+        u.schoolId === assignedSchool!.id &&
+        (u.email.toLowerCase() === trimmedEmail.toLowerCase() ||
+         u.username.toLowerCase() === trimmedUsername.toLowerCase())
     );
     if (duplicate) {
       const field = duplicate.email.toLowerCase() === trimmedEmail.toLowerCase() ? 'email' : 'username';
-      throw new Error(`An account with this ${field} is already registered. Please sign in or use another ${field}.`);
+      throw new Error(`An account with this ${field} is already registered at ${assignedSchool.name}.`);
     }
 
     const newId = 'usr_' + Date.now().toString(36);
+    const assignedRole = data.role === 'admin' ? 'admin' : 'teacher';
     const newUser: User = {
       id: newId,
+      schoolId: assignedSchool.id,
+      school_name: assignedSchool.name,
+      school_code: assignedSchool.code,
       username: trimmedUsername,
       email: trimmedEmail,
-      role: 'teacher',
+      role: assignedRole,
       status: 'active',
-      department: data.department?.trim() || 'General Faculty',
+      department: data.department?.trim() || (assignedRole === 'admin' ? 'Administration' : 'General Faculty'),
       storage_used: 0,
-      storage_limit: 16106127360, // 15 GB initial storage
+      storage_limit: assignedRole === 'admin' ? 32212254720 : 16106127360, // 30 GB for admin, 15 GB for teacher
       created_at: new Date().toISOString(),
       permissions: {
         ...DEFAULT_TEACHER_PERMISSIONS,
@@ -167,13 +235,17 @@ export const api = {
     users.push(newUser);
     LocalStore.saveUsers(users);
 
+    // Save to Firestore as well
+    onlineDb.saveUser(newUser).catch(() => {});
+
     LocalStore.setSessionUser(newUser.id);
     LocalStore.addAuditLog({
+      schoolId: assignedSchool.id,
       user_id: newUser.id,
       username: newUser.username,
       action: 'USER_REGISTERED',
       target_type: 'auth',
-      target_name: `Self-registered new faculty account (${newUser.username})`,
+      target_name: `Self-registered new faculty account at ${assignedSchool.name} (${newUser.username})`,
       device: currentDevice,
       ip: '127.0.0.1 (Self-Registration)',
     });
@@ -275,12 +347,41 @@ export const api = {
       recent?: boolean;
       trash?: boolean;
       search?: string;
+      schoolId?: string;
     } = {}
   ) {
+    const callerSchoolId = validateTenantSchoolScope(params.schoolId, 'getFiles');
     const currentUser = LocalStore.getSessionUser();
-    let files = LocalStore.getFiles();
+    let files = LocalStore.getFiles().filter((f) => f.schoolId === callerSchoolId);
 
-    // Cross-device sync: fetch files uploaded from other devices/browsers (mobile or desktop)
+    // Cross-device sync: fetch files uploaded from other devices/browsers scoped to this school
+    try {
+      const cloudFiles = await onlineDb.getFiles(callerSchoolId);
+      if (cloudFiles && cloudFiles.length > 0) {
+        const currentLocal = LocalStore.getFiles();
+        let hasNew = false;
+        for (const cf of cloudFiles) {
+          const idx = currentLocal.findIndex((lf) => lf.id === cf.id);
+          if (idx === -1) {
+            currentLocal.unshift({ ...cf, schoolId: callerSchoolId });
+            hasNew = true;
+          } else {
+            // Keep updated fields
+            currentLocal[idx] = { ...currentLocal[idx], ...cf, schoolId: callerSchoolId };
+          }
+        }
+        if (hasNew) {
+          LocalStore.saveFiles(currentLocal);
+        }
+        files = currentLocal.filter((f) => f.schoolId === callerSchoolId);
+      } else if (files.length > 0) {
+        // Seed initial files to online Firestore
+        onlineDb.saveFilesBatch(files.slice(0, 15)).catch(() => {});
+      }
+    } catch {
+      // offline mode fallback
+    }
+
     try {
       const token = currentUser?.id || currentUser?.email || 'usr_vadivubichem';
       const res = await fetch('/api/files', {
@@ -301,6 +402,7 @@ export const api = {
             if (!exists) {
               currentLocal.unshift({
                 ...sf,
+                schoolId: sf.schoolId || callerSchoolId,
                 server_file_id: sf.id,
                 storage_path: `/api/files/${sf.id}/download`,
               });
@@ -309,7 +411,7 @@ export const api = {
           }
           if (hasNew) {
             LocalStore.saveFiles(currentLocal);
-            files = currentLocal;
+            files = currentLocal.filter((f) => f.schoolId === callerSchoolId);
           }
         }
       }
@@ -359,21 +461,28 @@ export const api = {
   },
 
   async updateFile(id: string, updates: Partial<TeachingFile>) {
+    const callerSchoolId = validateTenantSchoolScope();
     const files = LocalStore.getFiles();
     const idx = files.findIndex((f) => f.id === id);
     if (idx === -1) throw new Error('File not found');
 
     const prev = files[idx];
+    if (prev.schoolId && prev.schoolId !== callerSchoolId) {
+      throw new Error(`Cross-Institutional Access Denied: File belongs to institution "${prev.schoolId}".`);
+    }
+
     const updated = {
       ...prev,
       ...updates,
+      schoolId: callerSchoolId,
       updated_at: new Date().toISOString(),
     };
     files[idx] = updated;
     LocalStore.saveFiles(files);
+    onlineDb.updateFile(id, updates).catch(() => {});
 
     const currentUser = LocalStore.getSessionUser();
-    const folders = LocalStore.getFolders();
+    const folders = LocalStore.getFolders().filter((f) => f.schoolId === callerSchoolId);
 
     // Audit move action
     if (updates.folder_id !== undefined && updates.folder_id !== prev.folder_id) {
@@ -381,6 +490,7 @@ export const api = {
         ? folders.find((f) => f.id === updates.folder_id)?.folder_name || 'Folder'
         : 'Root Directory';
       LocalStore.addAuditLog({
+        schoolId: callerSchoolId,
         user_id: currentUser?.id || prev.user_id,
         username: currentUser?.username || 'Teacher',
         action: 'MOVE_FILE',
@@ -398,6 +508,7 @@ export const api = {
         throw new Error('Permission Denied: Renaming files has been disabled for your teacher account by the Administrator.');
       }
       LocalStore.addAuditLog({
+        schoolId: callerSchoolId,
         user_id: currentUser?.id || prev.user_id,
         username: currentUser?.username || 'Teacher',
         action: 'RENAME_FILE',
@@ -413,9 +524,14 @@ export const api = {
   },
 
   async deleteFile(id: string, permanent: boolean = false) {
+    const callerSchoolId = validateTenantSchoolScope();
     let files = LocalStore.getFiles();
     const file = files.find((f) => f.id === id);
     if (!file) throw new Error('File not found');
+
+    if (file.schoolId && file.schoolId !== callerSchoolId) {
+      throw new Error(`Cross-Institutional Access Denied: File belongs to another institution (${file.schoolId}).`);
+    }
 
     const currentUser = LocalStore.getSessionUser();
     if (currentUser && currentUser.role === 'teacher' && currentUser.permissions?.can_delete === false) {
@@ -431,13 +547,16 @@ export const api = {
         user.storage_used = Math.max(0, user.storage_used - file.file_size);
         LocalStore.saveUsers(users);
       }
+      onlineDb.deleteFile(id).catch(() => {});
     } else {
       files = files.map((f) => (f.id === id ? { ...f, is_trashed: true } : f));
+      onlineDb.updateFile(id, { is_trashed: true }).catch(() => {});
     }
     LocalStore.saveFiles(files);
 
     // Audit file deletion
     LocalStore.addAuditLog({
+      schoolId: callerSchoolId,
       user_id: currentUser?.id || file.user_id,
       username: currentUser?.username || 'Teacher',
       action: permanent ? 'DELETE_FILE_PERMANENT' : 'MOVE_TO_TRASH',
@@ -453,21 +572,30 @@ export const api = {
 
   // Batch delete files
   async batchDeleteFiles(ids: string[], permanent: boolean = false) {
+    const callerSchoolId = validateTenantSchoolScope();
     let files = LocalStore.getFiles();
     const currentUser = LocalStore.getSessionUser();
     if (currentUser && currentUser.role === 'teacher' && currentUser.permissions?.can_delete === false) {
       throw new Error('Permission Denied: Batch file deletion has been disabled for your teacher account by the Administrator.');
     }
-    const targetFiles = files.filter((f) => ids.includes(f.id));
+    // Only affect files that belong to current institution
+    const targetFiles = files.filter((f) => ids.includes(f.id) && f.schoolId === callerSchoolId);
 
     if (permanent) {
-      files = files.filter((f) => !ids.includes(f.id));
+      files = files.filter((f) => !targetFiles.some(tf => tf.id === f.id));
+      for (const f of targetFiles) {
+        onlineDb.deleteFile(f.id).catch(() => {});
+      }
     } else {
-      files = files.map((f) => (ids.includes(f.id) ? { ...f, is_trashed: true } : f));
+      files = files.map((f) => (targetFiles.some(tf => tf.id === f.id) ? { ...f, is_trashed: true } : f));
+      for (const f of targetFiles) {
+        onlineDb.updateFile(f.id, { is_trashed: true }).catch(() => {});
+      }
     }
     LocalStore.saveFiles(files);
 
     LocalStore.addAuditLog({
+      schoolId: callerSchoolId,
       user_id: currentUser?.id || 'usr_emal',
       username: currentUser?.username || 'Teacher',
       action: permanent ? 'BATCH_DELETE_PERMANENT' : 'BATCH_MOVE_TO_TRASH',
@@ -483,18 +611,23 @@ export const api = {
 
   // Batch move files
   async batchMoveFiles(ids: string[], targetFolderId: string | null) {
+    const callerSchoolId = validateTenantSchoolScope();
     let files = LocalStore.getFiles();
     const currentUser = LocalStore.getSessionUser();
-    const folders = LocalStore.getFolders();
+    const folders = LocalStore.getFolders().filter(f => f.schoolId === callerSchoolId);
     const destFolderName = targetFolderId
       ? folders.find((f) => f.id === targetFolderId)?.folder_name || 'Folder'
       : 'Root Directory';
 
-    const targetFiles = files.filter((f) => ids.includes(f.id));
-    files = files.map((f) => (ids.includes(f.id) ? { ...f, folder_id: targetFolderId, updated_at: new Date().toISOString() } : f));
+    const targetFiles = files.filter((f) => ids.includes(f.id) && f.schoolId === callerSchoolId);
+    files = files.map((f) => (targetFiles.some(tf => tf.id === f.id) ? { ...f, folder_id: targetFolderId, updated_at: new Date().toISOString() } : f));
     LocalStore.saveFiles(files);
+    for (const f of targetFiles) {
+      onlineDb.updateFile(f.id, { folder_id: targetFolderId, updated_at: new Date().toISOString() }).catch(() => {});
+    }
 
     LocalStore.addAuditLog({
+      schoolId: callerSchoolId,
       user_id: currentUser?.id || 'usr_emal',
       username: currentUser?.username || 'Teacher',
       action: 'BATCH_MOVE_FILES',
@@ -509,9 +642,14 @@ export const api = {
   },
 
   async copyFile(id: string) {
+    const callerSchoolId = validateTenantSchoolScope();
     const files = LocalStore.getFiles();
     const file = files.find((f) => f.id === id);
     if (!file) throw new Error('File not found');
+
+    if (file.schoolId && file.schoolId !== callerSchoolId) {
+      throw new Error('Access Denied: Cannot copy resources from another institution.');
+    }
 
     const ext = file.file_extension;
     const nameWithoutExt = file.file_name.replace(`.${ext}`, '');
@@ -520,6 +658,7 @@ export const api = {
     const newFile: TeachingFile = {
       ...file,
       id: 'file_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      schoolId: callerSchoolId,
       file_name: newFileName,
       uploaded_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -529,6 +668,7 @@ export const api = {
 
     files.unshift(newFile);
     LocalStore.saveFiles(files);
+    onlineDb.saveFile(newFile).catch(() => {});
 
     return { file: newFile };
   },
@@ -603,7 +743,8 @@ export const api = {
 
         if (!targetFolderId) {
           const config = categoryFolderMap[category] || categoryFolderMap.document;
-          const folders = LocalStore.getFolders();
+          const callerSchoolId = validateTenantSchoolScope();
+          const folders = LocalStore.getFolders().filter((f) => f.schoolId === callerSchoolId);
           const userId = currentUser ? currentUser.id : 'usr_emal';
           let folder = folders.find((f) => f.user_id === userId && f.folder_name.toLowerCase() === config.name.toLowerCase());
           if (!folder) {
@@ -613,6 +754,7 @@ export const api = {
           if (!folder) {
             folder = {
               id: 'fld_' + config.name.toLowerCase() + '_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+              schoolId: callerSchoolId,
               user_id: userId,
               parent_folder_id: null,
               folder_name: config.name,
@@ -620,16 +762,20 @@ export const api = {
               created_at: new Date().toISOString(),
               file_count: 0,
             };
-            folders.unshift(folder);
-            LocalStore.saveFolders(folders);
+            const allFolders = LocalStore.getFolders();
+            allFolders.unshift(folder);
+            LocalStore.saveFolders(allFolders);
+            onlineDb.saveFolder(folder).catch(() => {});
           }
 
           targetFolderId = folder.id;
           targetFolderName = folder.folder_name;
         }
 
+        const callerSchoolId = validateTenantSchoolScope();
         const newTeachingFile: TeachingFile = {
           id: fileId,
+          schoolId: callerSchoolId,
           user_id: currentUser ? currentUser.id : 'usr_emal',
           folder_id: targetFolderId,
           file_name: file.name,
@@ -655,6 +801,24 @@ export const api = {
         LocalStore.saveFiles(files);
         recordFileAccess(newTeachingFile, file).catch(() => {});
 
+        // Save to online Firestore database (enables cross-device sharing between mobile and desktop)
+        fileToBase64(file)
+          .then((b64) => {
+            if (b64) {
+              newTeachingFile.content_base64 = b64;
+              const curFiles = LocalStore.getFiles();
+              const idx = curFiles.findIndex((f) => f.id === newTeachingFile.id);
+              if (idx !== -1) {
+                curFiles[idx].content_base64 = b64;
+                LocalStore.saveFiles(curFiles);
+              }
+            }
+            onlineDb.saveFile(newTeachingFile).catch(() => {});
+          })
+          .catch(() => {
+            onlineDb.saveFile(newTeachingFile).catch(() => {});
+          });
+
         // Update user storage
         if (currentUser) {
           const users = LocalStore.getUsers();
@@ -667,6 +831,7 @@ export const api = {
 
         // Add Audit Log
         LocalStore.addAuditLog({
+          schoolId: callerSchoolId,
           user_id: currentUser ? currentUser.id : 'usr_emal',
           username: currentUser ? currentUser.username : 'Teacher',
           action: 'AUTO_CATEGORIZE_UPLOAD',
@@ -727,9 +892,37 @@ export const api = {
   },
 
   // Folders
-  async getFolders() {
-    const folders = LocalStore.getFolders();
-    const files = LocalStore.getFiles();
+  async getFolders(schoolIdParam?: string) {
+    const callerSchoolId = validateTenantSchoolScope(schoolIdParam, 'getFolders');
+    try {
+      const cloudFolders = await onlineDb.getFolders(callerSchoolId);
+      if (cloudFolders && cloudFolders.length > 0) {
+        const currentLocal = LocalStore.getFolders();
+        let hasNew = false;
+        for (const cf of cloudFolders) {
+          const idx = currentLocal.findIndex((lf) => lf.id === cf.id);
+          if (idx === -1) {
+            currentLocal.push({ ...cf, schoolId: callerSchoolId });
+            hasNew = true;
+          } else {
+            currentLocal[idx] = { ...currentLocal[idx], ...cf, schoolId: callerSchoolId };
+          }
+        }
+        if (hasNew) {
+          LocalStore.saveFolders(currentLocal);
+        }
+      } else {
+        const currentLocal = LocalStore.getFolders().filter((f) => f.schoolId === callerSchoolId);
+        for (const f of currentLocal) {
+          onlineDb.saveFolder(f).catch(() => {});
+        }
+      }
+    } catch {
+      // offline fallback
+    }
+
+    const folders = LocalStore.getFolders().filter((f) => f.schoolId === callerSchoolId);
+    const files = LocalStore.getFiles().filter((fl) => fl.schoolId === callerSchoolId);
 
     // Recalculate file count per folder
     const enriched = folders.map((f) => ({
@@ -741,6 +934,7 @@ export const api = {
   },
 
   async createFolder(name: string, parentFolderId: string | null = null, color: string = '#6366f1') {
+    const callerSchoolId = validateTenantSchoolScope();
     const currentUser = LocalStore.getSessionUser();
     if (currentUser && currentUser.role === 'teacher' && currentUser.permissions?.can_create_folder === false) {
       throw new Error('Permission Denied: Creating folders has been disabled for your teacher account by the Administrator.');
@@ -749,6 +943,7 @@ export const api = {
 
     const newFolder: Folder = {
       id: 'fld_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      schoolId: callerSchoolId,
       user_id: currentUser?.id || 'usr_emal',
       parent_folder_id: parentFolderId,
       folder_name: name.trim(),
@@ -759,8 +954,10 @@ export const api = {
 
     folders.unshift(newFolder);
     LocalStore.saveFolders(folders);
+    onlineDb.saveFolder(newFolder).catch(() => {});
 
     LocalStore.addAuditLog({
+      schoolId: callerSchoolId,
       user_id: currentUser?.id || 'usr_emal',
       username: currentUser?.username || 'Teacher',
       action: 'CREATE_FOLDER',
@@ -774,25 +971,43 @@ export const api = {
   },
 
   async updateFolder(id: string, updates: Partial<Folder>) {
+    const callerSchoolId = validateTenantSchoolScope();
     const folders = LocalStore.getFolders();
     const idx = folders.findIndex((f) => f.id === id);
     if (idx === -1) throw new Error('Folder not found');
 
-    folders[idx] = { ...folders[idx], ...updates };
+    if (folders[idx].schoolId && folders[idx].schoolId !== callerSchoolId) {
+      throw new Error('Cross-Institutional Access Denied: Cannot modify folder belonging to another institution.');
+    }
+
+    folders[idx] = { ...folders[idx], ...updates, schoolId: callerSchoolId };
     LocalStore.saveFolders(folders);
+    onlineDb.saveFolder(folders[idx]).catch(() => {});
 
     return { folder: folders[idx] };
   },
 
   async deleteFolder(id: string) {
+    const callerSchoolId = validateTenantSchoolScope();
     let folders = LocalStore.getFolders();
+    const targetFolder = folders.find(f => f.id === id);
+    if (!targetFolder) throw new Error('Folder not found');
+
+    if (targetFolder.schoolId && targetFolder.schoolId !== callerSchoolId) {
+      throw new Error('Cross-Institutional Access Denied: Cannot delete folder belonging to another institution.');
+    }
+
     folders = folders.filter((f) => f.id !== id);
     LocalStore.saveFolders(folders);
+    onlineDb.deleteFolder(id).catch(() => {});
 
     // Unfile files in this folder
     const files = LocalStore.getFiles();
     files.forEach((f) => {
-      if (f.folder_id === id) f.folder_id = null;
+      if (f.folder_id === id && f.schoolId === callerSchoolId) {
+        f.folder_id = null;
+        onlineDb.updateFile(f.id, { folder_id: null }).catch(() => {});
+      }
     });
     LocalStore.saveFiles(files);
 
@@ -806,6 +1021,7 @@ export const api = {
     _permission: 'view' | 'edit' = 'view',
     sharedMode: string = 'all_teachers'
   ) {
+    const callerSchoolId = validateTenantSchoolScope();
     const currentUser = LocalStore.getSessionUser();
     if (currentUser && currentUser.role === 'teacher' && currentUser.permissions?.can_share === false) {
       throw new Error('Permission Denied: File sharing has been restricted for your teacher account by the Administrator.');
@@ -814,6 +1030,10 @@ export const api = {
     const file = files.find((f) => f.id === fileId);
     if (!file) throw new Error('File not found');
 
+    if (file.schoolId && file.schoolId !== callerSchoolId) {
+      throw new Error('Access Denied: Cannot share resources belonging to another institution.');
+    }
+
     file.shared_mode = sharedMode as any;
     LocalStore.saveFiles(files);
 
@@ -821,10 +1041,12 @@ export const api = {
   },
 
   // Stats
-  async getStats(): Promise<SystemStats> {
-    const users = LocalStore.getUsers();
-    const files = LocalStore.getFiles().filter((f) => !f.is_trashed);
-    const folders = LocalStore.getFolders();
+  async getStats(schoolIdParam?: string): Promise<SystemStats> {
+    const callerSchoolId = validateTenantSchoolScope(schoolIdParam, 'getStats');
+    const users = LocalStore.getUsers().filter((u) => u.schoolId === callerSchoolId);
+    const files = LocalStore.getFiles().filter((f) => !f.is_trashed && f.schoolId === callerSchoolId);
+    const folders = LocalStore.getFolders().filter((f) => f.schoolId === callerSchoolId);
+    const school = LocalStore.getSchoolById(callerSchoolId);
 
     const totalVideos = files.filter((f) => f.file_type === 'video').length;
     const totalAudio = files.filter((f) => f.file_type === 'audio').length;
@@ -844,7 +1066,7 @@ export const api = {
       totalImages,
       totalOther,
       totalStorageUsed,
-      storageLimit: 107374182400, // 100 GB
+      storageLimit: school?.storage_quota_bytes || 214748364800, // 200 GB
       todayUploads: files.filter((f) => {
         const up = new Date(f.uploaded_at);
         const now = new Date();
@@ -858,14 +1080,16 @@ export const api = {
   },
 
   // Admin Dashboard
-  async getAdminDashboard() {
+  async getAdminDashboard(schoolIdParam?: string) {
+    const callerSchoolId = validateTenantSchoolScope(schoolIdParam, 'getAdminDashboard');
     LocalStore.recalculateStorage();
-    const users = LocalStore.getUsers();
-    const auditLogs = LocalStore.getAuditLogs();
-    const stats = await this.getStats();
-    const allFiles = LocalStore.getFiles();
+    const users = LocalStore.getUsers().filter((u) => u.schoolId === callerSchoolId);
+    const auditLogs = LocalStore.getAuditLogs().filter((l) => l.schoolId === callerSchoolId);
+    const stats = await this.getStats(callerSchoolId);
+    const allFiles = LocalStore.getFiles().filter((f) => f.schoolId === callerSchoolId);
     const trashedFiles = allFiles.filter((f) => f.is_trashed);
     const trashedSize = trashedFiles.reduce((acc, f) => acc + (f.file_size || 0), 0);
+    const currentSchool = LocalStore.getSchoolById(callerSchoolId);
 
     return {
       metrics: {
@@ -875,13 +1099,20 @@ export const api = {
       },
       users,
       auditLogs,
+      currentSchool,
+      schools: LocalStore.getSchools(),
     };
   },
 
   async updateAdminUser(id: string, updates: Partial<User> & { password?: string }) {
+    const callerSchoolId = validateTenantSchoolScope();
     const users = LocalStore.getUsers();
     const idx = users.findIndex((u) => u.id === id);
     if (idx === -1) throw new Error('User not found');
+
+    if (users[idx].schoolId && users[idx].schoolId !== callerSchoolId) {
+      throw new Error('Access Denied: User belongs to another institution.');
+    }
 
     const currentUser = LocalStore.getSessionUser();
     const currentDevice = getSimulatedDevice();
@@ -910,6 +1141,7 @@ export const api = {
     if (password) {
       saveStoredPassword(id, password);
       LocalStore.addAuditLog({
+        schoolId: callerSchoolId,
         user_id: currentUser?.id || 'usr_pssofttech',
         username: currentUser?.username || 'pssofttech',
         action: 'PASSWORD_RESET',
@@ -923,6 +1155,7 @@ export const api = {
 
     if (userFields.role && userFields.role !== targetUser.role) {
       LocalStore.addAuditLog({
+        schoolId: callerSchoolId,
         user_id: currentUser?.id || 'usr_pssofttech',
         username: currentUser?.username || 'pssofttech',
         action: 'ROLE_CHANGED',
@@ -936,6 +1169,7 @@ export const api = {
 
     if (userFields.status && userFields.status !== targetUser.status) {
       LocalStore.addAuditLog({
+        schoolId: callerSchoolId,
         user_id: currentUser?.id || 'usr_pssofttech',
         username: currentUser?.username || 'pssofttech',
         action: 'STATUS_CHANGED',
@@ -954,6 +1188,7 @@ export const api = {
       };
       userFields.permissions = mergedPerms;
       LocalStore.addAuditLog({
+        schoolId: callerSchoolId,
         user_id: currentUser?.id || 'usr_pssofttech',
         username: currentUser?.username || 'pssofttech',
         action: 'PERMISSIONS_UPDATED',
@@ -967,6 +1202,7 @@ export const api = {
 
     if (userFields.storage_limit && userFields.storage_limit !== targetUser.storage_limit) {
       LocalStore.addAuditLog({
+        schoolId: callerSchoolId,
         user_id: currentUser?.id || 'usr_pssofttech',
         username: currentUser?.username || 'pssofttech',
         action: 'QUOTA_UPDATED',
@@ -989,16 +1225,19 @@ export const api = {
   },
 
   async createAdminUser(userData: Partial<User> & { password?: string; permissions?: Partial<TeacherPermissions> }) {
+    const callerSchoolId = validateTenantSchoolScope();
     const users = LocalStore.getUsers();
+    const school = LocalStore.getSchoolById(callerSchoolId);
 
-    // Check duplicate email or username
+    // Check duplicate email or username within this school
     const duplicate = users.find(
       (u) =>
-        u.email.toLowerCase() === (userData.email || '').toLowerCase().trim() ||
-        u.username.toLowerCase() === (userData.username || '').toLowerCase().trim()
+        u.schoolId === callerSchoolId &&
+        (u.email.toLowerCase() === (userData.email || '').toLowerCase().trim() ||
+        u.username.toLowerCase() === (userData.username || '').toLowerCase().trim())
     );
     if (duplicate) {
-      throw new Error(`A user with this ${duplicate.email.toLowerCase() === (userData.email || '').toLowerCase().trim() ? 'email' : 'username'} already exists.`);
+      throw new Error(`A faculty member with this ${duplicate.email.toLowerCase() === (userData.email || '').toLowerCase().trim() ? 'email' : 'username'} already exists in ${school?.name || 'this institution'}.`);
     }
 
     const newId = 'usr_' + Date.now().toString(36);
@@ -1006,6 +1245,9 @@ export const api = {
     const assignedRole: 'teacher' = 'teacher';
     const newUser: User = {
       id: newId,
+      schoolId: callerSchoolId,
+      school_name: school?.name || 'Govt Hr Sec School Pannaipuram',
+      school_code: school?.code || 'STATE-405',
       username: userData.username?.trim() || 'new_teacher',
       email: userData.email?.trim() || 'teacher@teacherhub.edu',
       role: assignedRole,
@@ -1031,6 +1273,7 @@ export const api = {
 
     const currentUser = LocalStore.getSessionUser();
     LocalStore.addAuditLog({
+      schoolId: callerSchoolId,
       user_id: currentUser?.id || 'usr_pssofttech',
       username: currentUser?.username || 'pssofttech',
       action: 'USER_CREATED',
@@ -1038,16 +1281,21 @@ export const api = {
       target_name: `Created account ${newUser.username}`,
       device: getSimulatedDevice(),
       ip: '127.0.0.1',
-      details: `New multi-user faculty account provisioned: ${newUser.email} (${newUser.department}, role: teacher, admin rights: disabled)`,
+      details: `New faculty account provisioned for ${school?.name || 'institution'}: ${newUser.email} (${newUser.department}, role: teacher)`,
     });
 
     return { user: newUser };
   },
 
   async deleteAdminUser(id: string) {
+    const callerSchoolId = validateTenantSchoolScope();
     let users = LocalStore.getUsers();
     const target = users.find((u) => u.id === id);
     if (!target) throw new Error('User not found.');
+
+    if (target.schoolId && target.schoolId !== callerSchoolId) {
+      throw new Error('Access Denied: User belongs to another institution.');
+    }
 
     if (
       target.id === 'usr_pssofttech' ||
@@ -1073,6 +1321,7 @@ export const api = {
 
     const currentUser = LocalStore.getSessionUser();
     LocalStore.addAuditLog({
+      schoolId: callerSchoolId,
       user_id: currentUser?.id || 'usr_pssofttech',
       username: currentUser?.username || 'pssofttech',
       action: 'USER_DELETED',
@@ -1086,37 +1335,185 @@ export const api = {
     return { success: true };
   },
 
+  // Institutional Management Methods
+  async getSchools(): Promise<School[]> {
+    try {
+      const cloudSchools = await onlineDb.getSchools();
+      if (cloudSchools && cloudSchools.length > 0) {
+        const localSchools = LocalStore.getSchools();
+        let changed = false;
+        for (const cs of cloudSchools) {
+          const idx = localSchools.findIndex((s) => s.id === cs.id);
+          if (idx === -1) {
+            localSchools.push(cs);
+            changed = true;
+          } else {
+            localSchools[idx] = { ...localSchools[idx], ...cs };
+          }
+        }
+        if (changed) {
+          LocalStore.saveSchools(localSchools);
+        }
+      }
+    } catch {
+      // offline fallback
+    }
+    return LocalStore.getSchools();
+  },
+
+  async getCurrentSchool(): Promise<School | undefined> {
+    const currentUser = LocalStore.getSessionUser();
+    const schoolId = currentUser?.schoolId || 'SCH_PANNAIPURAM';
+    return LocalStore.getSchoolById(schoolId);
+  },
+
+  async registerSchool(data: {
+    name: string;
+    code: string;
+    address?: string;
+    contact_email?: string;
+    storage_quota_bytes?: number;
+  }): Promise<School> {
+    const existing = LocalStore.getSchoolByCode(data.code);
+    if (existing) {
+      throw new Error(`A school with code "${data.code}" is already registered. Please choose a unique institutional code.`);
+    }
+
+    const newSchool = LocalStore.registerSchool(data);
+    onlineDb.saveSchool(newSchool).catch(() => {});
+
+    const currentUser = LocalStore.getSessionUser();
+    LocalStore.addAuditLog({
+      schoolId: newSchool.id,
+      user_id: currentUser?.id || 'usr_admin',
+      username: currentUser?.username || 'admin',
+      action: 'REGISTER_SCHOOL',
+      target_type: 'auth',
+      target_name: `Registered new institution: ${newSchool.name} (${newSchool.code})`,
+      device: getSimulatedDevice(),
+      ip: '127.0.0.1',
+      details: `New school tenant created with ${((newSchool.storage_quota_bytes || 0) / (1024 * 1024 * 1024)).toFixed(0)} GB allocated quota.`,
+    });
+
+    return newSchool;
+  },
+
+  async updateSchool(schoolId: string, updates: Partial<School>): Promise<School> {
+    const callerSchoolId = validateTenantSchoolScope(schoolId, 'updateSchool');
+    const updated = LocalStore.updateSchool(callerSchoolId, updates);
+    if (!updated) throw new Error('School record not found');
+    onlineDb.saveSchool(updated).catch(() => {});
+
+    const currentUser = LocalStore.getSessionUser();
+    LocalStore.addAuditLog({
+      schoolId: callerSchoolId,
+      user_id: currentUser?.id || 'usr_admin',
+      username: currentUser?.username || 'admin',
+      action: 'UPDATE_SCHOOL_SETTINGS',
+      target_type: 'auth',
+      target_name: `Updated settings for ${updated.name}`,
+      device: getSimulatedDevice(),
+      ip: '127.0.0.1',
+      details: `Institutional configuration modified. Code: ${updated.code}`,
+    });
+
+    return updated;
+  },
+
+  async getInstitutionalAnalytics(schoolIdParam?: string) {
+    const schoolId = validateTenantSchoolScope(schoolIdParam, 'getInstitutionalAnalytics');
+    const school = LocalStore.getSchoolById(schoolId) || {
+      id: schoolId,
+      name: 'Govt Hr Sec School Pannaipuram',
+      code: 'STATE-405',
+      storage_quota_bytes: 214748364800,
+      created_at: new Date().toISOString(),
+    };
+
+    const teachers = LocalStore.getUsers().filter((u) => u.schoolId === schoolId);
+    const files = LocalStore.getFiles().filter((f) => f.schoolId === schoolId && !f.is_trashed);
+    const folders = LocalStore.getFolders().filter((f) => f.schoolId === schoolId);
+
+    const totalStorageUsed = files.reduce((acc, f) => acc + (f.file_size || 0), 0);
+    const quotaBytes = school.storage_quota_bytes || 214748364800;
+
+    // Breakdown by department
+    const departmentsMap: Record<string, { count: number; storage: number }> = {};
+    for (const t of teachers) {
+      const dept = t.department || 'General Faculty';
+      if (!departmentsMap[dept]) {
+        departmentsMap[dept] = { count: 0, storage: 0 };
+      }
+      departmentsMap[dept].count += 1;
+      departmentsMap[dept].storage += t.storage_used || 0;
+    }
+
+    const departmentStats = Object.entries(departmentsMap).map(([dept, data]) => ({
+      department: dept,
+      teacherCount: data.count,
+      storageUsed: data.storage,
+    }));
+
+    // Breakdown by file type
+    const mediaBreakdown = {
+      video: files.filter((f) => f.file_type === 'video').reduce((acc, f) => acc + (f.file_size || 0), 0),
+      audio: files.filter((f) => f.file_type === 'audio').reduce((acc, f) => acc + (f.file_size || 0), 0),
+      document: files.filter((f) => f.file_type === 'document').reduce((acc, f) => acc + (f.file_size || 0), 0),
+      image: files.filter((f) => f.file_type === 'image').reduce((acc, f) => acc + (f.file_size || 0), 0),
+      other: files.filter((f) => f.file_type === 'other').reduce((acc, f) => acc + (f.file_size || 0), 0),
+    };
+
+    return {
+      school,
+      totalTeachers: teachers.length,
+      activeTeachers: teachers.filter((t) => t.status === 'active').length,
+      suspendedTeachers: teachers.filter((t) => t.status === 'suspended').length,
+      totalFiles: files.length,
+      totalFolders: folders.length,
+      totalStorageUsed,
+      quotaBytes,
+      percentageUsed: quotaBytes > 0 ? (totalStorageUsed / quotaBytes) * 100 : 0,
+      departmentStats,
+      mediaBreakdown,
+      recentAuditLogs: LocalStore.getAuditLogs().filter((l) => l.schoolId === schoolId).slice(0, 10),
+    };
+  },
+
   async emptySystemTrash() {
+    const callerSchoolId = validateTenantSchoolScope();
     let files = LocalStore.getFiles();
-    const trashedCount = files.filter((f) => f.is_trashed).length;
-    files = files.filter((f) => !f.is_trashed);
+    const trashedCount = files.filter((f) => f.is_trashed && f.schoolId === callerSchoolId).length;
+    files = files.filter((f) => !(f.is_trashed && f.schoolId === callerSchoolId));
     LocalStore.saveFiles(files);
     LocalStore.recalculateStorage();
 
     const currentUser = LocalStore.getSessionUser();
     LocalStore.addAuditLog({
+      schoolId: callerSchoolId,
       user_id: currentUser?.id || 'usr_pssofttech',
       username: currentUser?.username || 'pssofttech',
       action: 'EMPTY_SYSTEM_TRASH',
       target_type: 'file',
-      target_name: `Purged ${trashedCount} trashed file(s) across system`,
+      target_name: `Purged ${trashedCount} trashed file(s) across institution repository`,
       device: getSimulatedDevice(),
       ip: '127.0.0.1',
-      details: 'Administrator permanently purged all trashed files from the central storage repository.',
+      details: 'Administrator permanently purged all trashed files from the institution storage repository.',
     });
 
     return { success: true, count: trashedCount };
   },
 
   async emptyUserTrash(userId: string) {
+    const callerSchoolId = validateTenantSchoolScope();
     let files = LocalStore.getFiles();
-    const trashedForUser = files.filter((f) => f.user_id === userId && f.is_trashed);
-    files = files.filter((f) => !(f.user_id === userId && f.is_trashed));
+    const trashedForUser = files.filter((f) => f.user_id === userId && f.is_trashed && f.schoolId === callerSchoolId);
+    files = files.filter((f) => !(f.user_id === userId && f.is_trashed && f.schoolId === callerSchoolId));
     LocalStore.saveFiles(files);
     LocalStore.recalculateStorage();
 
     const currentUser = LocalStore.getSessionUser();
     LocalStore.addAuditLog({
+      schoolId: callerSchoolId,
       user_id: currentUser?.id || 'usr_admin',
       username: currentUser?.username || 'admin',
       action: 'EMPTY_USER_TRASH',

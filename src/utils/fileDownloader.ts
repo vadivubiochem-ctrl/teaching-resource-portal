@@ -6,6 +6,18 @@ import { getCachedBlob } from '../services/offlineStorage.js';
  * Downloads any file reliably onto the user's device without 404 server errors
  */
 export async function downloadTeachingFile(file: TeachingFile): Promise<void> {
+  // 0. If online Firestore stored base64 content, decode and trigger instant download directly
+  if (file.content_base64) {
+    try {
+      const response = await fetch(file.content_base64);
+      const b = await response.blob();
+      triggerBlobDownload(b, file.file_name);
+      return;
+    } catch {
+      // fallback to next methods
+    }
+  }
+
   // 1. Try retrieving local binary Blob from IndexedDB
   let blob: Blob | null = await getCachedBlob(file.id);
   if (!blob) {

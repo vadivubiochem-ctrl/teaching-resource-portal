@@ -10,7 +10,10 @@
       "department": "School Administration & IT",
       "storage_used": 367001600,
       "storage_limit": 53687091200,
-      "created_at": "2026-01-10T08:00:00.000Z"
+      "created_at": "2026-01-10T08:00:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM",
+      "school_name": "Govt Hr Sec School Pannaipuram",
+      "school_code": "STATE-405"
     },
     {
       "id": "usr_emal",
@@ -22,19 +25,25 @@
       "department": "Science & Computing",
       "storage_used": 134217728,
       "storage_limit": 16106127360,
-      "created_at": "2026-02-01T09:30:00.000Z"
+      "created_at": "2026-02-01T09:30:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM",
+      "school_name": "Govt Hr Sec School Pannaipuram",
+      "school_code": "STATE-405"
     },
     {
       "id": "usr_pssofttech",
       "username": "pssofttech",
       "email": "pssofttech@gmail.com",
       "password_hash": "$2b$10$1QdHDIUkq86zgYrTnBCEEuMiRrM9c2pbh5pmIwOYN5SJK8lAO.44y",
-      "role": "teacher",
+      "role": "admin",
       "status": "active",
       "department": "Computer Science Department",
       "storage_used": 256901120,
       "storage_limit": 16106127360,
-      "created_at": "2026-02-15T11:00:00.000Z"
+      "created_at": "2026-02-15T11:00:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM",
+      "school_name": "Govt Hr Sec School Pannaipuram",
+      "school_code": "STATE-405"
     },
     {
       "id": "usr_vasisoft",
@@ -46,7 +55,10 @@
       "department": "Mathematics & Technology",
       "storage_used": 188743680,
       "storage_limit": 16106127360,
-      "created_at": "2026-03-01T14:15:00.000Z"
+      "created_at": "2026-03-01T14:15:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM",
+      "school_name": "Govt Hr Sec School Pannaipuram",
+      "school_code": "STATE-405"
     },
     {
       "id": "usr_vadivubichem",
@@ -58,7 +70,10 @@
       "department": "Biochemistry & Life Sciences",
       "storage_used": 325058560,
       "storage_limit": 16106127360,
-      "created_at": "2026-03-05T10:45:00.000Z"
+      "created_at": "2026-03-05T10:45:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM",
+      "school_name": "Govt Hr Sec School Pannaipuram",
+      "school_code": "STATE-405"
     },
     {
       "id": "usr_vadivubiochem_alt",
@@ -70,7 +85,10 @@
       "department": "Biochemistry & Life Sciences",
       "storage_used": 204472320,
       "storage_limit": 16106127360,
-      "created_at": "2026-03-06T09:00:00.000Z"
+      "created_at": "2026-03-06T09:00:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM",
+      "school_name": "Govt Hr Sec School Pannaipuram",
+      "school_code": "STATE-405"
     }
   ],
   "files": [
@@ -92,7 +110,8 @@
       "shared_mode": "all_teachers",
       "duration": 1845,
       "owner_name": "pssofttech",
-      "owner_email": "pssofttech@gmail.com"
+      "owner_email": "pssofttech@gmail.com",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fil_cs_networks",
@@ -112,7 +131,8 @@
       "shared_mode": "private",
       "duration": 1220,
       "owner_name": "pssofttech",
-      "owner_email": "pssofttech@gmail.com"
+      "owner_email": "pssofttech@gmail.com",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fil_cs_syllabus_pdf",
@@ -131,7 +151,8 @@
       "mime_type": "application/pdf",
       "shared_mode": "all_teachers",
       "owner_name": "pssofttech",
-      "owner_email": "pssofttech@gmail.com"
+      "owner_email": "pssofttech@gmail.com",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fil_audio_lecture",
@@ -151,7 +172,8 @@
       "shared_mode": "shared_users",
       "duration": 1540,
       "owner_name": "vadivubichem",
-      "owner_email": "vadivubichem@gmail.com"
+      "owner_email": "vadivubichem@gmail.com",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fil_cell_diagram",
@@ -170,7 +192,8 @@
       "mime_type": "image/png",
       "shared_mode": "all_teachers",
       "owner_name": "vadivubichem",
-      "owner_email": "vadivubichem@gmail.com"
+      "owner_email": "vadivubichem@gmail.com",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fil_math_model_qp",
@@ -189,7 +212,8 @@
       "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "shared_mode": "all_teachers",
       "owner_name": "vasisoft20815",
-      "owner_email": "vasisoft20815@gmail.com"
+      "owner_email": "vasisoft20815@gmail.com",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fil_emal_chem_audio",
@@ -209,7 +233,8 @@
       "shared_mode": "all_teachers",
       "duration": 890,
       "owner_name": "emal",
-      "owner_email": "emal@teacherhub.edu"
+      "owner_email": "emal@teacherhub.edu",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fil_grades_sheet",
@@ -228,7 +253,48 @@
       "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "shared_mode": "all_teachers",
       "owner_name": "pssofttech",
-      "owner_email": "pssofttech@gmail.com"
+      "owner_email": "pssofttech@gmail.com",
+      "schoolId": "SCH_PANNAIPURAM"
+    },
+    {
+      "id": "fil_july_academic_plan",
+      "user_id": "usr_vadivubichem",
+      "folder_id": null,
+      "file_name": "July_Academic_Plan_and_Video_Links.xlsx",
+      "file_type": "document",
+      "file_extension": "xlsx",
+      "file_size": 1450000,
+      "storage_path": "sample_lesson_notes.txt",
+      "device": "Desktop (Windows 11)",
+      "uploaded_at": "2026-09-06T08:30:00.000Z",
+      "updated_at": "2026-09-06T08:30:00.000Z",
+      "is_favorite": true,
+      "is_trashed": false,
+      "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "shared_mode": "all_teachers",
+      "owner_name": "vadivubichem",
+      "owner_email": "vadivubichem@gmail.com",
+      "schoolId": "SCH_PANNAIPURAM"
+    },
+    {
+      "id": "fil_june_academic_plan",
+      "user_id": "usr_vadivubichem",
+      "folder_id": null,
+      "file_name": "June_Academic_Plan_and_Video_Links.xlsx",
+      "file_type": "document",
+      "file_extension": "xlsx",
+      "file_size": 1380000,
+      "storage_path": "sample_lesson_notes.txt",
+      "device": "Desktop (Windows 11)",
+      "uploaded_at": "2026-09-06T08:25:00.000Z",
+      "updated_at": "2026-09-06T08:25:00.000Z",
+      "is_favorite": true,
+      "is_trashed": false,
+      "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "shared_mode": "all_teachers",
+      "owner_name": "vadivubichem",
+      "owner_email": "vadivubichem@gmail.com",
+      "schoolId": "SCH_PANNAIPURAM"
     }
   ],
   "folders": [
@@ -238,7 +304,8 @@
       "parent_folder_id": null,
       "folder_name": "Class 11",
       "color": "#3B82F6",
-      "created_at": "2026-03-01T08:00:00.000Z"
+      "created_at": "2026-03-01T08:00:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_c11_cs",
@@ -246,7 +313,8 @@
       "parent_folder_id": "fld_class11",
       "folder_name": "Computer Science",
       "color": "#6366F1",
-      "created_at": "2026-03-01T08:05:00.000Z"
+      "created_at": "2026-03-01T08:05:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_c11_qp",
@@ -254,7 +322,8 @@
       "parent_folder_id": "fld_class11",
       "folder_name": "Question Papers",
       "color": "#0EA5E9",
-      "created_at": "2026-03-01T08:10:00.000Z"
+      "created_at": "2026-03-01T08:10:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_class12",
@@ -262,7 +331,8 @@
       "parent_folder_id": null,
       "folder_name": "Class 12",
       "color": "#8B5CF6",
-      "created_at": "2026-03-02T09:00:00.000Z"
+      "created_at": "2026-03-02T09:00:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_c12_cs",
@@ -270,7 +340,8 @@
       "parent_folder_id": "fld_class12",
       "folder_name": "Computer Science",
       "color": "#EC4899",
-      "created_at": "2026-03-02T09:05:00.000Z"
+      "created_at": "2026-03-02T09:05:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_c12_l1",
@@ -278,7 +349,8 @@
       "parent_folder_id": "fld_c12_cs",
       "folder_name": "Lesson 1",
       "color": "#F43F5E",
-      "created_at": "2026-03-02T09:10:00.000Z"
+      "created_at": "2026-03-02T09:10:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_c12_l2",
@@ -286,7 +358,8 @@
       "parent_folder_id": "fld_c12_cs",
       "folder_name": "Lesson 2",
       "color": "#F97316",
-      "created_at": "2026-03-02T09:15:00.000Z"
+      "created_at": "2026-03-02T09:15:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_c12_l5",
@@ -294,7 +367,8 @@
       "parent_folder_id": "fld_c12_cs",
       "folder_name": "Lesson 5",
       "color": "#10B981",
-      "created_at": "2026-03-02T09:20:00.000Z"
+      "created_at": "2026-03-02T09:20:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_c12_videos",
@@ -302,7 +376,8 @@
       "parent_folder_id": "fld_class12",
       "folder_name": "Videos",
       "color": "#E11D48",
-      "created_at": "2026-03-02T09:25:00.000Z"
+      "created_at": "2026-03-02T09:25:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_c12_audio",
@@ -310,7 +385,8 @@
       "parent_folder_id": "fld_class12",
       "folder_name": "Audio",
       "color": "#14B8A6",
-      "created_at": "2026-03-02T09:30:00.000Z"
+      "created_at": "2026-03-02T09:30:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_ppt",
@@ -318,7 +394,8 @@
       "parent_folder_id": null,
       "folder_name": "PPT",
       "color": "#F59E0B",
-      "created_at": "2026-03-03T10:00:00.000Z"
+      "created_at": "2026-03-03T10:00:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_pdf",
@@ -326,7 +403,8 @@
       "parent_folder_id": null,
       "folder_name": "PDF",
       "color": "#EF4444",
-      "created_at": "2026-03-03T10:05:00.000Z"
+      "created_at": "2026-03-03T10:05:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_worksheets",
@@ -334,7 +412,8 @@
       "parent_folder_id": null,
       "folder_name": "Worksheets",
       "color": "#059669",
-      "created_at": "2026-03-04T11:00:00.000Z"
+      "created_at": "2026-03-04T11:00:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "fld_model_qp",
@@ -342,7 +421,8 @@
       "parent_folder_id": null,
       "folder_name": "Model Question Papers",
       "color": "#6366F1",
-      "created_at": "2026-03-04T11:30:00.000Z"
+      "created_at": "2026-03-04T11:30:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     }
   ],
   "sharing": [
@@ -369,6 +449,30 @@
   ],
   "auditLogs": [
     {
+      "schoolId": "SCH_PANNAIPURAM",
+      "user_id": "usr_vadivubichem",
+      "username": "vadivubichem",
+      "action": "LOGIN",
+      "target_type": "auth",
+      "target_name": "Successful login via Desktop (Computer) (Govt Hr Sec School Pannaipuram)",
+      "device": "Desktop (Computer)",
+      "ip": "127.0.0.1",
+      "id": "log_1789314746910_orw9",
+      "timestamp": "2026-09-13T15:52:26.910Z"
+    },
+    {
+      "schoolId": "SCH_PANNAIPURAM",
+      "user_id": "usr_pssofttech",
+      "username": "pssofttech",
+      "action": "LOGIN",
+      "target_type": "auth",
+      "target_name": "Successful login via Desktop (Computer) (Govt Hr Sec School Pannaipuram)",
+      "device": "Desktop (Computer)",
+      "ip": "127.0.0.1",
+      "id": "log_1789314744514_18d4",
+      "timestamp": "2026-09-13T15:52:24.514Z"
+    },
+    {
       "user_id": "usr_emal",
       "username": "emal",
       "action": "LOGIN",
@@ -377,7 +481,8 @@
       "device": "Desktop (Computer)",
       "ip": "127.0.0.1",
       "id": "log_1788689015006_r1bn",
-      "timestamp": "2026-09-06T10:03:35.006Z"
+      "timestamp": "2026-09-06T10:03:35.006Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "user_id": "usr_pssofttech",
@@ -388,7 +493,8 @@
       "device": "Desktop (Computer)",
       "ip": "127.0.0.1",
       "id": "log_1788688616028_3ndh",
-      "timestamp": "2026-09-06T09:56:56.028Z"
+      "timestamp": "2026-09-06T09:56:56.028Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "user_id": "usr_emal",
@@ -399,7 +505,8 @@
       "device": "Desktop (Computer)",
       "ip": "127.0.0.1",
       "id": "log_1788688612690_rx8r",
-      "timestamp": "2026-09-06T09:56:52.690Z"
+      "timestamp": "2026-09-06T09:56:52.690Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "log_1",
@@ -410,7 +517,8 @@
       "target_name": "Class_12_Lesson_5.mp4",
       "device": "Mobile (Android Phone)",
       "ip": "192.168.1.42",
-      "timestamp": "2026-09-05T14:20:00.000Z"
+      "timestamp": "2026-09-05T14:20:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "log_2",
@@ -421,7 +529,8 @@
       "target_name": "Login from Desktop Computer",
       "device": "Desktop (Windows 11 PC)",
       "ip": "192.168.1.105",
-      "timestamp": "2026-09-05T15:10:00.000Z"
+      "timestamp": "2026-09-05T15:10:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
     },
     {
       "id": "log_3",
@@ -432,7 +541,37 @@
       "target_name": "Security scan and quota validation",
       "device": "Desktop (Admin Workstation)",
       "ip": "10.0.0.1",
-      "timestamp": "2026-09-06T01:00:00.000Z"
+      "timestamp": "2026-09-06T01:00:00.000Z",
+      "schoolId": "SCH_PANNAIPURAM"
+    }
+  ],
+  "schools": [
+    {
+      "id": "SCH_PANNAIPURAM",
+      "name": "Govt Hr Sec School Pannaipuram",
+      "code": "STATE-405",
+      "address": "Main Road, Pannaipuram, Theni District, Tamil Nadu",
+      "contact_email": "admin@ghsspannaipuram.edu",
+      "storage_quota_bytes": 214748364800,
+      "created_at": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "SCH_STJOHNS",
+      "name": "St. John's Higher Secondary School",
+      "code": "SCH_STJOHNS",
+      "address": "88 Cathedral Road, South Wing",
+      "contact_email": "principal@stjohns.edu",
+      "storage_quota_bytes": 107374182400,
+      "created_at": "2026-02-01T00:00:00.000Z"
+    },
+    {
+      "id": "SCH_GREENVALE",
+      "name": "Greenvale Science & Tech Academy",
+      "code": "SCH_GREENVALE",
+      "address": "5 Science Park Blvd, Tech Zone",
+      "contact_email": "office@greenvale.edu",
+      "storage_quota_bytes": 161061273600,
+      "created_at": "2026-02-15T00:00:00.000Z"
     }
   ]
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   GraduationCap,
   Lock,
@@ -16,10 +16,13 @@ import {
   Scale,
   Key,
   ShieldCheck,
+  Building2,
+  ChevronDown,
+  Sparkles,
 } from 'lucide-react';
 import { api, getSimulatedDevice, setSimulatedDevice } from '../services/api.js';
 import { LocalStore } from '../services/store.js';
-import type { User } from '../types.js';
+import type { User, School } from '../types.js';
 import { InstitutionalRulesModal } from './InstitutionalRulesModal.js';
 
 interface AuthPageProps {
@@ -30,6 +33,12 @@ interface AuthPageProps {
 export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChange }) => {
   // Main view mode: 'login' | 'register'
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+
+  // Multi-Tenancy School selection state
+  const [schools, setSchools] = useState<School[]>([]);
+  const [selectedSchoolCode, setSelectedSchoolCode] = useState<string>('STATE-405');
+  const [customSchoolCodeInput, setCustomSchoolCodeInput] = useState('');
+  const [useCustomCode, setUseCustomCode] = useState(false);
 
   // Login form state
   const [identifier, setIdentifier] = useState('pssofttech@gmail.com');
@@ -52,6 +61,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [regShowPassword, setRegShowPassword] = useState(false);
+  const [regSchoolMode, setRegSchoolMode] = useState<'existing' | 'new'>('existing');
+  const [regSelectedSchoolCode, setRegSelectedSchoolCode] = useState('STATE-405');
+  const [regNewSchoolName, setRegNewSchoolName] = useState('');
+  const [regNewSchoolCode, setRegNewSchoolCode] = useState('');
+  const [regRole, setRegRole] = useState<'teacher' | 'admin'>('teacher');
 
   // Forgot password modal
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -60,6 +74,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
   const [forgotStep, setForgotStep] = useState<'request' | 'reset'>('request');
   const [newPassword, setNewPassword] = useState('');
   const [resetPin, setResetPin] = useState('');
+
+  // Load available schools on mount
+  useEffect(() => {
+    api.getSchools().then((loaded) => {
+      setSchools(loaded);
+      if (loaded.length > 0 && !selectedSchoolCode) {
+        setSelectedSchoolCode(loaded[0].code);
+      }
+    });
+  }, []);
 
   const handleDeviceChange = (newDevice: string) => {
     setDevice(newDevice);
@@ -79,9 +103,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
     setError(null);
     setSuccessMessage(null);
 
+    const schoolCodeToSubmit = useCustomCode
+      ? customSchoolCodeInput.trim()
+      : selectedSchoolCode === 'ALL'
+      ? undefined
+      : selectedSchoolCode;
+
     try {
-      const res = await api.login(identifier.trim(), password, device);
-      setSuccessMessage(`Signed in as ${res.user.username}. Loading dashboard...`);
+      const res = await api.login(identifier.trim(), password, device, schoolCodeToSubmit || undefined);
+      setSuccessMessage(`Signed in as ${res.user.username} (${res.user.school_name || 'Govt Hr Sec School Pannaipuram'}). Loading dashboard...`);
       setTimeout(() => {
         onLoginSuccess(res.user);
       }, 300);
@@ -114,14 +144,30 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
     setSuccessMessage(null);
 
     try {
+      let schoolCodeToUse = regSelectedSchoolCode;
+      if (regSchoolMode === 'new') {
+        if (!regNewSchoolName.trim() || !regNewSchoolCode.trim()) {
+          throw new Error('Please specify a School Name and unique School Code for the new institution.');
+        }
+        const createdSchool = await api.registerSchool({
+          name: regNewSchoolName.trim(),
+          code: regNewSchoolCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '_'),
+          storage_quota_bytes: 214748364800, // 200 GB
+        });
+        schoolCodeToUse = createdSchool.code;
+      }
+
+      const assignedRole: 'admin' | 'teacher' = regSchoolMode === 'new' ? 'admin' : regRole;
       const res = await api.register({
         username: regUsername.trim(),
         email: regEmail.trim(),
         password: regPassword,
-        department: regDepartment.trim() || 'Biochemistry Department',
+        department: regDepartment.trim() || (assignedRole === 'admin' ? 'Administration' : 'General Faculty'),
         device,
+        schoolCode: schoolCodeToUse,
+        role: assignedRole,
       });
-      setSuccessMessage(`Teacher account created for ${res.user.username}! Logging you in...`);
+      setSuccessMessage(`Account created for ${res.user.username} as ${assignedRole.toUpperCase()} at ${res.user.school_name || 'School'}! Logging you in...`);
       setTimeout(() => {
         onLoginSuccess(res.user);
       }, 700);
@@ -246,6 +292,56 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
           {/* TAB 1: SIGN IN FLOW */}
           {authMode === 'login' && (
             <div>
+              {/* Institutional School Selection */}
+              <div className="mb-4 p-3 rounded-xl bg-slate-900/90 border border-indigo-900/40">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-indigo-300">
+                    <Building2 className="w-4 h-4 text-indigo-400" />
+                    <span>Select Institution / School</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setUseCustomCode(!useCustomCode)}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                  >
+                    {useCustomCode ? 'Choose from list' : 'Enter school code'}
+                  </button>
+                </div>
+
+                {!useCustomCode ? (
+                  <div className="relative">
+                    <select
+                      id="school-select"
+                      value={selectedSchoolCode}
+                      onChange={(e) => setSelectedSchoolCode(e.target.value)}
+                      className="w-full pl-3 pr-8 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none appearance-none cursor-pointer"
+                    >
+                      <option value="ALL">Auto-Detect School by Account</option>
+                      {schools.map((s) => (
+                        <option key={s.id} value={s.code}>
+                          {s.name} ({s.code})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Enter School Code (e.g. STATE-405)"
+                      value={customSchoolCodeInput}
+                      onChange={(e) => setCustomSchoolCodeInput(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                )}
+                <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-400">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  <span>Independent tenant isolation: Files &amp; faculty are scoped strictly to the selected school.</span>
+                </div>
+              </div>
+
               {/* Credentials Input Form */}
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
@@ -308,49 +404,63 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                   </div>
                 </div>
 
-                {/* Quick Account Selector Pills */}
-                <div className="p-3 bg-slate-900/70 border border-slate-700/60 rounded-xl space-y-2">
+                {/* Quick Multi-School Account Selector Pills */}
+                <div className="p-3 bg-slate-900/70 border border-slate-700/60 rounded-xl space-y-2.5">
                   <div className="text-[11px] text-slate-400 font-medium flex items-center justify-between">
-                    <span>Quick Select Default Credentials:</span>
+                    <span>Quick Test Logins (Independent School Tenants):</span>
                     <span className="text-[11px] text-indigo-300 font-mono">pwd: password123</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIdentifier('pssofttech@gmail.com');
-                        setPassword('password123');
-                      }}
-                      className={`px-2.5 py-1.5 rounded-lg border text-left text-xs transition-all cursor-pointer flex items-center gap-2 ${
-                        identifier === 'pssofttech@gmail.com'
-                          ? 'bg-indigo-600/30 border-indigo-500 text-white font-semibold'
-                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                      <div className="truncate">
-                        <div className="truncate">pssofttech@gmail.com</div>
-                        <div className="text-[10px] text-indigo-300 font-normal">Administrator</div>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIdentifier('vadivubichem@gmail.com');
-                        setPassword('password123');
-                      }}
-                      className={`px-2.5 py-1.5 rounded-lg border text-left text-xs transition-all cursor-pointer flex items-center gap-2 ${
-                        identifier === 'vadivubichem@gmail.com'
-                          ? 'bg-emerald-600/30 border-emerald-500 text-white font-semibold'
-                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <div className="truncate">
-                        <div className="truncate">vadivubichem@gmail.com</div>
-                        <div className="text-[10px] text-emerald-300 font-normal">Faculty Teacher</div>
-                      </div>
-                    </button>
+
+                  {/* Govt Hr Sec School Pannaipuram */}
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] font-semibold text-indigo-300 flex items-center gap-1">
+                      <Building2 className="w-3 h-3 text-indigo-400" />
+                      <span>Govt Hr Sec School Pannaipuram (Code: STATE-405)</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        id="btn-quick-state-admin"
+                        onClick={() => {
+                          setIdentifier('pssofttech@gmail.com');
+                          setPassword('password123');
+                          setSelectedSchoolCode('STATE-405');
+                          setUseCustomCode(false);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg border text-left text-xs transition-all cursor-pointer flex items-center gap-2 ${
+                          identifier === 'pssofttech@gmail.com'
+                            ? 'bg-indigo-600/30 border-indigo-500 text-white font-semibold'
+                            : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                        <div className="truncate">
+                          <div className="truncate">pssofttech@gmail.com</div>
+                          <div className="text-[10px] text-indigo-300 font-normal">State Admin</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        id="btn-quick-state-teacher"
+                        onClick={() => {
+                          setIdentifier('vadivubichem@gmail.com');
+                          setPassword('password123');
+                          setSelectedSchoolCode('STATE-405');
+                          setUseCustomCode(false);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg border text-left text-xs transition-all cursor-pointer flex items-center gap-2 ${
+                          identifier === 'vadivubichem@gmail.com'
+                            ? 'bg-emerald-600/30 border-emerald-500 text-white font-semibold'
+                            : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <div className="truncate">
+                          <div className="truncate">vadivubichem@gmail.com</div>
+                          <div className="text-[10px] text-emerald-300 font-normal">State Teacher</div>
+                        </div>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -365,7 +475,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                     />
                     <span className="text-xs sm:text-sm text-slate-300 select-none">Remember Me</span>
                   </label>
-                  <span className="text-xs text-slate-400">Standard cloud security</span>
+                  <span className="text-xs text-slate-400">Scoped tenant security</span>
                 </div>
 
                 <button
@@ -394,8 +504,96 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                 <UserCheck className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-white">Faculty Registration:</span> Enrolls a standard
-                  Teacher account with 15 GB cloud storage.
+                  Teacher account with 15 GB cloud storage under your institution's tenant partition.
                 </div>
+              </div>
+
+              {/* School Affiliation Selector */}
+              <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Building2 className="w-4 h-4 text-indigo-400" />
+                    <span>Institutional Affiliation</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRegSchoolMode('existing')}
+                      className={`px-2 py-1 rounded text-xs transition-colors cursor-pointer ${
+                        regSchoolMode === 'existing'
+                          ? 'bg-indigo-600 text-white font-medium'
+                          : 'bg-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Join Existing School
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRegSchoolMode('new')}
+                      className={`px-2 py-1 rounded text-xs transition-colors cursor-pointer ${
+                        regSchoolMode === 'new'
+                          ? 'bg-emerald-600 text-white font-medium'
+                          : 'bg-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      + Register New School
+                    </button>
+                  </div>
+                </div>
+
+                {regSchoolMode === 'existing' ? (
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">
+                      Choose Your School / Institution
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={regSelectedSchoolCode}
+                        onChange={(e) => setRegSelectedSchoolCode(e.target.value)}
+                        className="w-full pl-3 pr-8 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none appearance-none cursor-pointer"
+                      >
+                        {schools.map((s) => (
+                          <option key={s.id} value={s.code}>
+                            {s.name} ({s.code})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 pt-1">
+                    <div>
+                      <label className="block text-[11px] text-slate-300 mb-1">
+                        New School / Institution Name <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={regNewSchoolName}
+                        onChange={(e) => setRegNewSchoolName(e.target.value)}
+                        placeholder="e.g. St. Jude Secondary School"
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs placeholder-slate-500 focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-300 mb-1">
+                        Unique School Code <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={regNewSchoolCode}
+                        onChange={(e) => setRegNewSchoolCode(e.target.value)}
+                        placeholder="e.g. JUDE-301 or SCH_STJUDE"
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 uppercase font-mono"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Other teachers and administrators from your school will use this code to join.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -425,6 +623,48 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                   className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
+
+              {regSchoolMode === 'new' ? (
+                <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-xs text-emerald-300">
+                  <div className="font-semibold flex items-center gap-1.5 text-emerald-200">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span>School Administrator Account (Master)</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-400/80 mt-1">
+                    As the registrant of this new institution, you will receive Administrator access to create and manage your school's faculty accounts in isolation.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">
+                    Account Role
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRegRole('teacher')}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                        regRole === 'teacher'
+                          ? 'bg-indigo-600 border-indigo-500 text-white shadow-sm'
+                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Teacher (Faculty)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRegRole('admin')}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                        regRole === 'admin'
+                          ? 'bg-amber-600 border-amber-500 text-white shadow-sm'
+                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      School Administrator
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">

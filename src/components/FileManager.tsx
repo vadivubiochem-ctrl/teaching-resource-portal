@@ -36,9 +36,11 @@ import {
   CornerLeftUp,
   Move,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import type { TeachingFile, Folder as FolderType, User } from '../types.js';
 import { formatBytes, formatDate, formatDuration } from '../utils/formatters.js';
 import { getCachedFileIds } from '../services/offlineStorage.js';
+import { DynamicFileIcon, getFileFormatMeta } from '../services/fileIconService.js';
 
 interface FileManagerProps {
   files: TeachingFile[];
@@ -459,71 +461,6 @@ export const FileManager: React.FC<FileManagerProps> = ({
         </div>
       </div>
 
-      {/* Floating / Sticky Batch Actions Bar when files are selected */}
-      {selectedFileIds.size > 0 && (
-        <div className="sticky top-2 z-30 bg-indigo-950/95 border-2 border-indigo-500/80 rounded-2xl p-3 shadow-2xl backdrop-blur-md flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-xs">
-              {selectedFileIds.size}
-            </span>
-            <span className="text-xs font-bold text-white">
-              {selectedFileIds.size} file{selectedFileIds.size > 1 ? 's' : ''} selected
-            </span>
-            <button
-              type="button"
-              onClick={toggleSelectAll}
-              className="text-xs text-indigo-300 hover:text-white underline ml-1"
-            >
-              {isAllSelected ? 'Deselect all' : 'Select all'}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              id="batch-download-btn"
-              onClick={handleTriggerBatchDownload}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-              title="Download all selected files"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download ({selectedFileIds.size})</span>
-            </button>
-
-            <button
-              type="button"
-              id="batch-move-btn"
-              onClick={() => setBatchMoveOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-              title="Move all selected files into a folder"
-            >
-              <FolderInput className="w-3.5 h-3.5" />
-              <span>Move ({selectedFileIds.size})</span>
-            </button>
-
-            <button
-              type="button"
-              id="batch-delete-btn"
-              onClick={handleTriggerBatchDelete}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-              title="Delete or trash all selected files (Delete key)"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Delete ({selectedFileIds.size})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={clearSelection}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-1"
-              title="Clear selection (Esc)"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Toolbar: Select All Checkbox, Search, Sort & View Mode */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -860,9 +797,16 @@ export const FileManager: React.FC<FileManagerProps> = ({
 
                       <div
                         onClick={() => onPreview(file)}
-                        className="w-11 h-11 rounded-xl bg-slate-900/90 border border-slate-700/80 flex items-center justify-center cursor-pointer group-hover:scale-105 transition-transform"
+                        className="cursor-pointer"
+                        title="Click to preview file"
                       >
-                        {getFileIcon(file.file_type)}
+                        <DynamicFileIcon
+                          fileName={file.file_name}
+                          extension={file.file_extension}
+                          mimeType={file.mime_type}
+                          fileType={file.file_type}
+                          size="md"
+                        />
                       </div>
                     </div>
 
@@ -1103,9 +1047,14 @@ export const FileManager: React.FC<FileManagerProps> = ({
                             onClick={() => onPreview(file)}
                             className="cursor-pointer flex items-center gap-2.5 min-w-0"
                           >
-                            <div className="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center shrink-0">
-                              {getFileIcon(file.file_type)}
-                            </div>
+                            <DynamicFileIcon
+                              fileName={file.file_name}
+                              extension={file.file_extension}
+                              mimeType={file.mime_type}
+                              fileType={file.file_type}
+                              size="sm"
+                              showBadge={false}
+                            />
                             <div className="min-w-0">
                               <span className="font-semibold text-slate-200 group-hover:text-white truncate max-w-xs block">
                                 {file.file_name}
@@ -1121,9 +1070,14 @@ export const FileManager: React.FC<FileManagerProps> = ({
                         </div>
                       </td>
                       <td className="py-2.5 px-3">
-                        <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
-                          {file.file_extension}
-                        </span>
+                        {(() => {
+                          const meta = getFileFormatMeta(file.file_name, file.mime_type, file.file_type);
+                          return (
+                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md ${meta.badgeBg} shadow-2xs`}>
+                              {meta.extension}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">
                         {formatBytes(file.file_size)}
@@ -1338,6 +1292,80 @@ export const FileManager: React.FC<FileManagerProps> = ({
           </div>
         </div>
       )}
+
+      {/* Context-Aware Floating Action Bar (Appears when multiple files are selected) */}
+      <AnimatePresence>
+        {selectedFileIds.size > 1 && (
+          <motion.div
+            id="floating-batch-toolbar"
+            role="toolbar"
+            aria-label="Batch Actions Floating Toolbar"
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            className="fixed bottom-24 md:bottom-12 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 border-2 border-indigo-500/80 rounded-2xl p-2 sm:px-4 sm:py-2.5 shadow-2xl shadow-indigo-950/80 backdrop-blur-xl flex items-center gap-2 sm:gap-3 text-xs max-w-[95vw] overflow-x-auto"
+          >
+            {/* Selection Counter Pill */}
+            <div className="flex items-center gap-2 pr-2 border-r border-slate-700/80 shrink-0">
+              <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-bold text-[11px] flex items-center justify-center shadow-xs">
+                {selectedFileIds.size}
+              </span>
+              <span className="font-semibold text-white whitespace-nowrap hidden sm:inline">
+                {selectedFileIds.size} files selected
+              </span>
+            </div>
+
+            {/* Quick Action: Batch Download */}
+            <button
+              type="button"
+              id="batch-download-btn"
+              onClick={handleTriggerBatchDownload}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold transition-all shadow-sm hover:scale-[1.02] cursor-pointer whitespace-nowrap shrink-0"
+              title="Batch download all selected files"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Batch Download ({selectedFileIds.size})</span>
+            </button>
+
+            {/* Quick Action: Batch Move */}
+            <button
+              type="button"
+              id="batch-move-btn"
+              onClick={() => setBatchMoveOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 active:bg-slate-700 text-amber-300 border border-amber-500/40 font-semibold transition-all shadow-sm hover:scale-[1.02] cursor-pointer whitespace-nowrap shrink-0"
+              title="Batch move all selected files into a folder"
+            >
+              <FolderInput className="w-3.5 h-3.5" />
+              <span>Batch Move ({selectedFileIds.size})</span>
+            </button>
+
+            {/* Quick Action: Batch Delete */}
+            <button
+              type="button"
+              id="batch-delete-btn"
+              onClick={handleTriggerBatchDelete}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-semibold transition-all shadow-sm hover:scale-[1.02] cursor-pointer whitespace-nowrap shrink-0"
+              title="Batch delete or trash all selected files"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Batch Delete ({selectedFileIds.size})</span>
+            </button>
+
+            {/* Quick Action: Deselect All */}
+            <button
+              type="button"
+              id="batch-clear-selection-btn"
+              onClick={clearSelection}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-0.5 cursor-pointer shrink-0"
+              title="Clear selection (Esc)"
+              aria-label="Clear selection"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -36,12 +36,14 @@ import { AdminDashboard } from './components/AdminDashboard.js';
 import { InstitutionalRulesModal } from './components/InstitutionalRulesModal.js';
 import { CrossDeviceModal } from './components/CrossDeviceModal.js';
 import { MobileBottomNav } from './components/MobileBottomNav.js';
+import { FooterSyncStatus } from './components/FooterSyncStatus.js';
 import { formatBytes } from './utils/formatters.js';
 import { downloadTeachingFile } from './utils/fileDownloader.js';
 import { useOnlineStatus } from './utils/useOnlineStatus.js';
 import { usePWAInstall } from './utils/usePWAInstall.js';
 import { cacheFileMetadata, getCachedFiles } from './services/offlineStorage.js';
 import { syncManager } from './utils/syncManager.js';
+import { onlineDb } from './services/firebase.js';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -62,6 +64,8 @@ export default function App() {
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [loadingData, setLoadingData] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(new Date());
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // Simulated device state
   const [currentDevice, setCurrentDevice] = useState<string>(getSimulatedDevice());
@@ -136,6 +140,7 @@ export default function App() {
       // Give a brief smooth moment before switching back to 'Cloud Updated'
       setTimeout(() => {
         syncManager.setSyncing(false);
+        setLastSyncTime(new Date());
       }, 400);
     }
   }, [currentUser, searchQuery, activeTab]);
@@ -146,16 +151,52 @@ export default function App() {
     }
   }, [currentUser, loadRepositoryData]);
 
+  // Subscribe to syncManager status (Syncing vs idle)
+  useEffect(() => {
+    const unsub = syncManager.subscribeStatus((syncing) => {
+      setIsSyncing(syncing);
+      if (!syncing) {
+        setLastSyncTime(new Date());
+      }
+    });
+    return () => unsub();
+  }, []);
+
   // Listen for 'file-updated' BroadcastChannel events across all open browser windows/tabs
   useEffect(() => {
     const unsubscribe = syncManager.subscribe((msg) => {
       console.log('[syncManager] Received event from another window/tab:', msg.event);
       if (currentUser) {
+        setLastSyncTime(new Date());
         loadRepositoryData();
       }
     });
     return () => {
       unsubscribe();
+    };
+  }, [currentUser, loadRepositoryData]);
+
+  // Real-time Cloud Database Synchronization (Firestore): Instant sharing between Mobile and Desktop devices
+  // Updates 'Last Synced' timestamp whenever Firestore triggers a real-time data refresh
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsubFiles = onlineDb.subscribeFiles((cloudFiles) => {
+      if (cloudFiles && cloudFiles.length > 0) {
+        console.log('[Firestore] Real-time files update from cloud, updating last sync timestamp');
+        setLastSyncTime(new Date());
+        loadRepositoryData();
+      }
+    });
+    const unsubFolders = onlineDb.subscribeFolders((cloudFolders) => {
+      if (cloudFolders && cloudFolders.length > 0) {
+        console.log('[Firestore] Real-time folders update from cloud, updating last sync timestamp');
+        setLastSyncTime(new Date());
+        loadRepositoryData();
+      }
+    });
+    return () => {
+      unsubFiles();
+      unsubFolders();
     };
   }, [currentUser, loadRepositoryData]);
 
@@ -739,6 +780,19 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* Persistent Cross-Device Cloud Sync Status in Footer */}
+      <FooterSyncStatus
+        lastSyncTime={lastSyncTime}
+        isSyncing={isSyncing}
+        isOnline={isOnline}
+        totalFiles={files.length}
+        onManualSync={() => {
+          loadRepositoryData();
+          showToast('Refreshing real-time data from Firestore...', 'info');
+        }}
+        onOpenCrossDeviceModal={() => setCrossDeviceModalOpen(true)}
+      />
 
       {/* Mobile Touch Bottom Nav */}
       <MobileBottomNav

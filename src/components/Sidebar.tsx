@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   RefreshCw,
   Cloud,
+  Building2,
 } from 'lucide-react';
 import type { User } from '../types.js';
 import { formatBytes } from '../utils/formatters.js';
@@ -42,8 +43,10 @@ export type NavTab =
   | 'favorites'
   | 'recent'
   | 'recent-activity'
+  | 'storage-analytics'
   | 'trash'
   | 'settings'
+  | 'admin-institution'
   | 'admin-users'
   | 'admin-storage'
   | 'admin-reports'
@@ -129,11 +132,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'favorites', label: 'Favorites', icon: Star },
     { id: 'recent', label: 'Recent', icon: Clock },
     { id: 'recent-activity', label: 'Recent Activity', icon: History },
+    { id: 'storage-analytics', label: 'Storage Analytics', icon: BarChart3 },
     { id: 'trash', label: 'Trash', icon: Trash2 },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const adminNavItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: 'admin-institution', label: 'Institutional Management', icon: Building2 },
     { id: 'admin-users', label: 'User Management', icon: Users },
     { id: 'admin-storage', label: 'Storage Management', icon: HardDrive },
     { id: 'admin-reports', label: 'System Reports', icon: BarChart3 },

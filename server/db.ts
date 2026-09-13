@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
-import type { User, TeachingFile, Folder, SharingRecord, AuditLog } from '../src/types.js';
+import type { User, TeachingFile, Folder, SharingRecord, AuditLog, School } from '../src/types.js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
@@ -20,6 +20,7 @@ export interface StoredUser extends User {
 }
 
 export interface DatabaseSchema {
+  schools?: School[];
   users: StoredUser[];
   files: TeachingFile[];
   folders: Folder[];
@@ -30,11 +31,44 @@ export interface DatabaseSchema {
 function getInitialDatabase(): DatabaseSchema {
   const salt = bcrypt.genSaltSync(10);
 
+  const defaultSchools: School[] = [
+    {
+      id: 'SCH_PANNAIPURAM',
+      name: 'Govt Hr Sec School Pannaipuram',
+      code: 'STATE-405',
+      address: 'Main Road, Pannaipuram, Theni District, Tamil Nadu',
+      contact_email: 'admin@ghsspannaipuram.edu',
+      storage_quota_bytes: 214748364800, // 200 GB
+      created_at: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'SCH_STJOHNS',
+      name: "St. John's Higher Secondary School",
+      code: 'SCH_STJOHNS',
+      address: '88 Cathedral Road, South Wing',
+      contact_email: 'principal@stjohns.edu',
+      storage_quota_bytes: 107374182400, // 100 GB
+      created_at: '2026-02-01T00:00:00.000Z',
+    },
+    {
+      id: 'SCH_GREENVALE',
+      name: 'Greenvale Science & Tech Academy',
+      code: 'SCH_GREENVALE',
+      address: '5 Science Park Blvd, Tech Zone',
+      contact_email: 'office@greenvale.edu',
+      storage_quota_bytes: 161061273600, // 150 GB
+      created_at: '2026-02-15T00:00:00.000Z',
+    },
+  ];
+
   const defaultUsers: StoredUser[] = [
     {
       id: 'usr_admin',
+      schoolId: 'SCH_PANNAIPURAM',
+      school_name: 'Govt Hr Sec School Pannaipuram',
+      school_code: 'STATE-405',
       username: 'admin',
-      email: 'admin@teacherhub.edu',
+      email: 'admin@ghsspannaipuram.edu',
       password_hash: bcrypt.hashSync('admin123', salt),
       role: 'admin',
       status: 'active',
@@ -45,6 +79,9 @@ function getInitialDatabase(): DatabaseSchema {
     },
     {
       id: 'usr_emal',
+      schoolId: 'SCH_PANNAIPURAM',
+      school_name: 'Govt Hr Sec School Pannaipuram',
+      school_code: 'STATE-405',
       username: 'emal',
       email: 'emal@teacherhub.edu',
       password_hash: bcrypt.hashSync('email password', salt),
@@ -57,18 +94,24 @@ function getInitialDatabase(): DatabaseSchema {
     },
     {
       id: 'usr_pssofttech',
+      schoolId: 'SCH_PANNAIPURAM',
+      school_name: 'Govt Hr Sec School Pannaipuram',
+      school_code: 'STATE-405',
       username: 'pssofttech',
       email: 'pssofttech@gmail.com',
       password_hash: bcrypt.hashSync('password123', salt),
-      role: 'teacher',
+      role: 'admin',
       status: 'active',
-      department: 'Computer Science Department',
+      department: 'Computer Science & System Administration',
       storage_used: 245 * 1024 * 1024,
-      storage_limit: 15 * 1024 * 1024 * 1024,
+      storage_limit: 107374182400,
       created_at: '2026-02-15T11:00:00.000Z',
     },
     {
       id: 'usr_vasisoft',
+      schoolId: 'SCH_PANNAIPURAM',
+      school_name: 'Govt Hr Sec School Pannaipuram',
+      school_code: 'STATE-405',
       username: 'vasisoft20815',
       email: 'vasisoft20815@gmail.com',
       password_hash: bcrypt.hashSync('password123', salt),
@@ -81,26 +124,32 @@ function getInitialDatabase(): DatabaseSchema {
     },
     {
       id: 'usr_vadivubichem',
+      schoolId: 'SCH_PANNAIPURAM',
+      school_name: 'Govt Hr Sec School Pannaipuram',
+      school_code: 'STATE-405',
       username: 'vadivubichem',
       email: 'vadivubichem@gmail.com',
       password_hash: bcrypt.hashSync('password123', salt),
       role: 'teacher',
       status: 'active',
-      department: 'Biochemistry & Life Sciences',
+      department: 'Biochemistry Department',
       storage_used: 310 * 1024 * 1024,
-      storage_limit: 15 * 1024 * 1024 * 1024,
+      storage_limit: 16106127360,
       created_at: '2026-03-05T10:45:00.000Z',
     },
     {
       id: 'usr_vadivubiochem_alt',
+      schoolId: 'SCH_PANNAIPURAM',
+      school_name: 'Govt Hr Sec School Pannaipuram',
+      school_code: 'STATE-405',
       username: 'vadivubiochem',
       email: 'vadivubiochem@gmail.com',
       password_hash: bcrypt.hashSync('password123', salt),
       role: 'teacher',
       status: 'active',
-      department: 'Biochemistry & Life Sciences',
+      department: 'Biochemistry Department',
       storage_used: 195 * 1024 * 1024,
-      storage_limit: 15 * 1024 * 1024 * 1024,
+      storage_limit: 16106127360,
       created_at: '2026-03-06T09:00:00.000Z',
     },
   ];
@@ -489,11 +538,12 @@ function getInitialDatabase(): DatabaseSchema {
   ];
 
   return {
+    schools: defaultSchools,
     users: defaultUsers,
-    files: defaultFiles,
-    folders: defaultFolders,
+    files: defaultFiles.map(f => ({ ...f, schoolId: f.schoolId || 'SCH_PANNAIPURAM' })),
+    folders: defaultFolders.map(f => ({ ...f, schoolId: f.schoolId || 'SCH_PANNAIPURAM' })),
     sharing: defaultSharing,
-    auditLogs: defaultAuditLogs,
+    auditLogs: defaultAuditLogs.map(l => ({ ...l, schoolId: l.schoolId || 'SCH_PANNAIPURAM' })),
   };
 }
 
@@ -510,12 +560,98 @@ class Database {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed: DatabaseSchema = JSON.parse(raw);
 
+        const initial = getInitialDatabase();
+        if (!parsed.schools || parsed.schools.length === 0) {
+          parsed.schools = initial.schools;
+        }
+
+        // Filter out Riverside from schools
+        parsed.schools = parsed.schools.filter(
+          (s) => s.id !== 'SCH_RIVERSIDE' && s.code !== 'RIVER-202' && !(s.name || '').includes('Riverside')
+        );
+
+        // Migrate Central Model Academy / Central High to Govt Hr Sec School Pannaipuram
+        for (let i = 0; i < parsed.schools.length; i++) {
+          if (
+            parsed.schools[i].id === 'SCH_CENTRAL' ||
+            parsed.schools[i].code === 'SCH_CENTRAL' ||
+            parsed.schools[i].code === 'CENTRAL-101' ||
+            parsed.schools[i].name.includes('Central')
+          ) {
+            parsed.schools[i] = {
+              ...parsed.schools[i],
+              id: 'SCH_PANNAIPURAM',
+              name: 'Govt Hr Sec School Pannaipuram',
+              code: 'STATE-405',
+              address: 'Main Road, Pannaipuram, Theni District, Tamil Nadu',
+              contact_email: 'admin@ghsspannaipuram.edu',
+            };
+          }
+        }
+
+        // Guarantee Govt Hr Sec School Pannaipuram is in schools
+        if (!parsed.schools.some((s) => s.id === 'SCH_PANNAIPURAM')) {
+          parsed.schools.unshift({
+            id: 'SCH_PANNAIPURAM',
+            name: 'Govt Hr Sec School Pannaipuram',
+            code: 'STATE-405',
+            address: 'Main Road, Pannaipuram, Theni District, Tamil Nadu',
+            contact_email: 'admin@ghsspannaipuram.edu',
+            storage_quota_bytes: 214748364800,
+            created_at: '2026-01-01T00:00:00.000Z',
+          });
+        }
+
+        // Filter out Riverside users
+        parsed.users = parsed.users.filter(
+          (u) =>
+            u.id !== 'usr_riverside_admin' &&
+            u.id !== 'usr_riverside_teacher' &&
+            u.schoolId !== 'SCH_RIVERSIDE' &&
+            u.school_code !== 'RIVER-202' &&
+            !u.email.includes('riverside.edu')
+        );
+
+        // Backfill and migrate schoolId on legacy users
+        parsed.users.forEach((u) => {
+          if (!u.schoolId || u.schoolId === 'SCH_CENTRAL') {
+            u.schoolId = 'SCH_PANNAIPURAM';
+            u.school_name = 'Govt Hr Sec School Pannaipuram';
+            u.school_code = 'STATE-405';
+          }
+          if (u.id === 'usr_pssofttech' || u.username === 'pssofttech') {
+            u.role = 'admin';
+            u.schoolId = 'SCH_PANNAIPURAM';
+            u.school_name = 'Govt Hr Sec School Pannaipuram';
+            u.school_code = 'STATE-405';
+          }
+          if (u.id === 'usr_vadivubichem' || u.username === 'vadivubichem') {
+            u.role = 'teacher';
+            u.schoolId = 'SCH_PANNAIPURAM';
+            u.school_name = 'Govt Hr Sec School Pannaipuram';
+            u.school_code = 'STATE-405';
+          }
+        });
+
+        // Filter Riverside files and folders
+        parsed.files = parsed.files.filter((f) => f.schoolId !== 'SCH_RIVERSIDE' && !f.id.includes('riverside'));
+        parsed.folders = parsed.folders.filter((fld) => fld.schoolId !== 'SCH_RIVERSIDE' && !fld.id.includes('riverside'));
+
+        parsed.files.forEach((f) => {
+          if (!f.schoolId || f.schoolId === 'SCH_CENTRAL') f.schoolId = 'SCH_PANNAIPURAM';
+        });
+        parsed.folders.forEach((f) => {
+          if (!f.schoolId || f.schoolId === 'SCH_CENTRAL') f.schoolId = 'SCH_PANNAIPURAM';
+        });
+        parsed.auditLogs.forEach((l) => {
+          if (!l.schoolId || l.schoolId === 'SCH_CENTRAL') l.schoolId = 'SCH_PANNAIPURAM';
+        });
+
         // Ensure July and June files exist
         const hasJuly = parsed.files.some((f) => f.id === 'fil_july_academic_plan' || f.file_name.toLowerCase().includes('july'));
         const hasJune = parsed.files.some((f) => f.id === 'fil_june_academic_plan' || f.file_name.toLowerCase().includes('june'));
 
         if (!hasJuly || !hasJune) {
-          const initial = getInitialDatabase();
           if (!hasJuly) {
             const julyFile = initial.files.find((f) => f.id === 'fil_july_academic_plan');
             if (julyFile) parsed.files.push(julyFile);
@@ -524,8 +660,8 @@ class Database {
             const juneFile = initial.files.find((f) => f.id === 'fil_june_academic_plan');
             if (juneFile) parsed.files.push(juneFile);
           }
-          this.save(parsed);
         }
+        this.save(parsed);
 
         return parsed;
       }
@@ -546,8 +682,41 @@ class Database {
     }
   }
 
+  // --- Schools ---
+  getSchools(): School[] {
+    return this.data.schools || [];
+  }
+
+  getSchoolById(id: string): School | undefined {
+    return (this.data.schools || []).find(s => s.id === id || s.code === id);
+  }
+
+  getSchoolByCode(code: string): School | undefined {
+    const clean = code.trim().toUpperCase();
+    return (this.data.schools || []).find(s => s.code.toUpperCase() === clean);
+  }
+
+  createSchool(school: School): School {
+    if (!this.data.schools) this.data.schools = [];
+    this.data.schools.push(school);
+    this.save();
+    return school;
+  }
+
+  updateSchool(id: string, updates: Partial<School>): School | undefined {
+    if (!this.data.schools) this.data.schools = [];
+    const index = this.data.schools.findIndex(s => s.id === id || s.code === id);
+    if (index === -1) return undefined;
+    this.data.schools[index] = { ...this.data.schools[index], ...updates };
+    this.save();
+    return this.data.schools[index];
+  }
+
   // --- Users ---
-  getUsers(): StoredUser[] {
+  getUsers(schoolId?: string): StoredUser[] {
+    if (schoolId) {
+      return this.data.users.filter(u => (u.schoolId || 'SCH_PANNAIPURAM') === schoolId);
+    }
     return this.data.users;
   }
 
@@ -555,10 +724,11 @@ class Database {
     return this.data.users.find(u => u.id === id);
   }
 
-  getUserByEmailOrUsername(identifier: string): StoredUser | undefined {
+  getUserByEmailOrUsername(identifier: string, schoolId?: string): StoredUser | undefined {
     const clean = identifier.trim().toLowerCase();
     return this.data.users.find(
-      u => u.email.toLowerCase() === clean || u.username.toLowerCase() === clean
+      u => (u.email.toLowerCase() === clean || u.username.toLowerCase() === clean) &&
+           (!schoolId || (u.schoolId || 'SCH_PANNAIPURAM') === schoolId)
     );
   }
 
@@ -587,7 +757,10 @@ class Database {
   }
 
   // --- Files ---
-  getFiles(): TeachingFile[] {
+  getFiles(schoolId?: string): TeachingFile[] {
+    if (schoolId) {
+      return this.data.files.filter(f => (f.schoolId || 'SCH_PANNAIPURAM') === schoolId);
+    }
     return this.data.files;
   }
 
@@ -595,16 +768,20 @@ class Database {
     return this.data.files.find(f => f.id === id);
   }
 
-  getUserFiles(userId: string, role: string): TeachingFile[] {
+  getUserFiles(userId: string, role: string, schoolId?: string): TeachingFile[] {
+    let files = this.data.files;
+    if (schoolId) {
+      files = files.filter(f => (f.schoolId || 'SCH_PANNAIPURAM') === schoolId);
+    }
     if (role === 'admin') {
-      return this.data.files;
+      return files;
     }
     // Teacher sees their own files + files shared with all_teachers + files explicitly shared with them
     const sharedWithUserFileIds = new Set(
       this.data.sharing.filter(s => s.shared_user_id === userId).map(s => s.file_id)
     );
 
-    return this.data.files.filter(
+    return files.filter(
       f => f.user_id === userId ||
            f.shared_mode === 'all_teachers' ||
            sharedWithUserFileIds.has(f.id)
@@ -655,15 +832,22 @@ class Database {
   }
 
   // --- Folders ---
-  getFolders(): Folder[] {
+  getFolders(schoolId?: string): Folder[] {
+    if (schoolId) {
+      return this.data.folders.filter(f => (f.schoolId || 'SCH_PANNAIPURAM') === schoolId);
+    }
     return this.data.folders;
   }
 
-  getUserFolders(userId: string, role: string): Folder[] {
-    if (role === 'admin') {
-      return this.data.folders;
+  getUserFolders(userId: string, role: string, schoolId?: string): Folder[] {
+    let folders = this.data.folders;
+    if (schoolId) {
+      folders = folders.filter(f => (f.schoolId || 'SCH_PANNAIPURAM') === schoolId);
     }
-    return this.data.folders.filter(f => f.user_id === userId);
+    if (role === 'admin') {
+      return folders;
+    }
+    return folders.filter(f => f.user_id === userId);
   }
 
   createFolder(folder: Folder): Folder {
@@ -721,7 +905,10 @@ class Database {
   }
 
   // --- Audit Logs ---
-  getAuditLogs(): AuditLog[] {
+  getAuditLogs(schoolId?: string): AuditLog[] {
+    if (schoolId) {
+      return this.data.auditLogs.filter(l => (l.schoolId || 'SCH_PANNAIPURAM') === schoolId).slice(0, 50);
+    }
     return this.data.auditLogs.slice(0, 50);
   }
 
