@@ -37,6 +37,7 @@ import { InstitutionalRulesModal } from './components/InstitutionalRulesModal.js
 import { CrossDeviceModal } from './components/CrossDeviceModal.js';
 import { MobileBottomNav } from './components/MobileBottomNav.js';
 import { FooterSyncStatus } from './components/FooterSyncStatus.js';
+import { AboutView } from './components/AboutView.js';
 import { formatBytes } from './utils/formatters.js';
 import { downloadTeachingFile } from './utils/fileDownloader.js';
 import { useOnlineStatus } from './utils/useOnlineStatus.js';
@@ -462,6 +463,8 @@ export default function App() {
         return 'Recycle Bin & Trash';
       case 'settings':
         return 'Account & Storage Settings';
+      case 'about':
+        return 'App Developer Info & About';
       default:
         return 'Resources';
     }
@@ -777,6 +780,11 @@ export default function App() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* About & App Developer Info Tab */}
+          {activeTab === 'about' && (
+            <AboutView onCopyNotice={(msg) => showToast(msg, 'success')} />
           )}
         </main>
       </div>

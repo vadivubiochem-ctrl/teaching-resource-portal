@@ -25,6 +25,7 @@ import {
   RefreshCw,
   Cloud,
   Building2,
+  Info,
 } from 'lucide-react';
 import type { User } from '../types.js';
 import { formatBytes } from '../utils/formatters.js';
@@ -46,6 +47,7 @@ export type NavTab =
   | 'storage-analytics'
   | 'trash'
   | 'settings'
+  | 'about'
   | 'admin-institution'
   | 'admin-users'
   | 'admin-storage'
@@ -135,6 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'storage-analytics', label: 'Storage Analytics', icon: BarChart3 },
     { id: 'trash', label: 'Trash', icon: Trash2 },
     { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'about', label: 'About', icon: Info },
   ];
 
   const adminNavItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [

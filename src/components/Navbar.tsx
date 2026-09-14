@@ -13,6 +13,7 @@ import {
   CheckCircle,
   Menu,
   Scale,
+  Info,
 } from 'lucide-react';
 import type { User } from '../types.js';
 import { formatBytes } from '../utils/formatters.js';
@@ -375,6 +376,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                     className="w-full text-left px-3.5 py-1.5 text-xs text-amber-400 hover:bg-amber-950/40 hover:text-amber-300 flex items-center gap-2 cursor-pointer font-medium"
                   >
                     <Scale className="w-3.5 h-3.5" /> Institutional Rules &amp; Governance
+                  </button>
+                  <button
+                    type="button"
+                    id="navbar-about-dev-btn"
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      if (onNavigate) onNavigate('about');
+                    }}
+                    className="w-full text-left px-3.5 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2 cursor-pointer"
+                  >
+                    <Info className="w-3.5 h-3.5 text-amber-400" /> App Developer Info
                   </button>
                 </div>
 
