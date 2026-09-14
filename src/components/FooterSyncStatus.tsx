@@ -63,7 +63,7 @@ export const FooterSyncStatus: React.FC<FooterSyncStatusProps> = ({
       id="footer-sync-status"
       className="sticky bottom-14 md:bottom-0 z-30 bg-slate-900/95 border-t border-slate-800/90 backdrop-blur-md px-4 sm:px-6 py-2.5 transition-colors"
     >
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 max-w-7xl mx-auto text-xs">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 w-full text-xs">
         {/* Left: Cloud Sync Status with Visual Status Icon and 'Last Synced' Timestamp */}
         <div className="flex items-center gap-2.5 flex-wrap justify-center sm:justify-start">
           {/* Main Status Badge */}

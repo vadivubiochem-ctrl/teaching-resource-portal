@@ -574,8 +574,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Body with Sidebar and Content Container */}
-      <div className="flex-1 flex max-w-7xl w-full mx-auto pb-16 md:pb-6">
+      {/* Main Body with Sidebar docked to the left and Content Container */}
+      <div className="flex-1 flex w-full pb-16 md:pb-6">
         {/* Responsive Desktop & Mobile Drawer Sidebar */}
         <Sidebar
           currentTab={activeTab as any}
