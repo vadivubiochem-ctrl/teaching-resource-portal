@@ -19,10 +19,32 @@ import {
   ChevronDown,
   Sparkles,
   X,
+  UserX,
+  HelpCircle,
+  RefreshCw,
 } from 'lucide-react';
-import { api, getSimulatedDevice, setSimulatedDevice } from '../services/api.js';
+import { api, getSimulatedDevice, setSimulatedDevice, AuthException } from '../services/api.js';
 import { LocalStore } from '../services/store.js';
+import { onlineDb } from '../services/firebase.js';
 import type { User, School } from '../types.js';
+
+interface AuthErrorInfo {
+  type: 'user_not_found' | 'invalid_password' | 'school_mismatch' | 'suspended' | 'general';
+  title: string;
+  message: string;
+  identifier?: string;
+  foundUser?: {
+    id?: string;
+    username: string;
+    email: string;
+    role?: string;
+    school_name?: string;
+    school_code?: string;
+    department?: string;
+  };
+  suggestedSchoolCode?: string;
+  suggestedSchoolName?: string;
+}
 
 interface AuthPageProps {
   onLoginSuccess: (user: User) => void;
@@ -46,6 +68,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<AuthErrorInfo | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [device, setDevice] = useState(getSimulatedDevice());
 
@@ -70,7 +93,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
   const [newPassword, setNewPassword] = useState('');
   const [resetPin, setResetPin] = useState('');
 
-  // Load available schools on mount
+  // Load available schools and sync cloud users on mount
   useEffect(() => {
     api.getSchools().then((loaded) => {
       setSchools(loaded);
@@ -78,6 +101,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
         setSelectedSchoolCode(loaded[0].code);
       }
     });
+
+    // Real-time roster sync from Firestore so new teacher accounts on mobile are immediately available
+    onlineDb.getUsers().then((cloudUsers) => {
+      if (cloudUsers && cloudUsers.length > 0) {
+        LocalStore.syncCloudUsers(cloudUsers);
+      }
+    }).catch(() => {});
+
+    const unsubUsers = onlineDb.subscribeUsers((cloudUsers) => {
+      if (cloudUsers && cloudUsers.length > 0) {
+        LocalStore.syncCloudUsers(cloudUsers);
+      }
+    });
+
+    return () => {
+      unsubUsers();
+    };
   }, []);
 
   const handleDeviceChange = (newDevice: string) => {
@@ -86,16 +126,100 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
     if (onDeviceChange) onDeviceChange(newDevice);
   };
 
+  // Structured Error Resolver to provide friendly, actionable feedback
+  const handleAuthError = (err: any, currentIdentifier: string) => {
+    setLoading(false);
+    if (err instanceof AuthException || err?.code) {
+      if (err.code === 'USER_NOT_FOUND') {
+        setAuthError({
+          type: 'user_not_found',
+          title: 'Faculty Account Not Found',
+          message: err.message || `No registered faculty account found for "${currentIdentifier}".`,
+          identifier: currentIdentifier,
+        });
+        return;
+      }
+      if (err.code === 'INVALID_PASSWORD') {
+        setAuthError({
+          type: 'invalid_password',
+          title: 'Incorrect Password',
+          message: err.message || `The password entered for "${currentIdentifier}" does not match.`,
+          identifier: currentIdentifier,
+          foundUser: err.foundUser,
+        });
+        return;
+      }
+      if (err.code === 'SCHOOL_MISMATCH') {
+        setAuthError({
+          type: 'school_mismatch',
+          title: 'Institution Mismatch',
+          message: err.message,
+          identifier: currentIdentifier,
+          suggestedSchoolCode: err.suggestedSchoolCode,
+          suggestedSchoolName: err.suggestedSchoolName,
+          foundUser: err.foundUser,
+        });
+        return;
+      }
+      if (err.code === 'ACCOUNT_SUSPENDED') {
+        setAuthError({
+          type: 'suspended',
+          title: 'Account Suspended',
+          message: err.message || 'This account has been temporarily suspended by the institution administrator.',
+          identifier: currentIdentifier,
+          foundUser: err.foundUser,
+        });
+        return;
+      }
+    }
+
+    const msg = String(err?.message || err?.error || '');
+    const lower = msg.toLowerCase();
+    if (lower.includes('not found') || lower.includes('no account') || lower.includes('user not found')) {
+      setAuthError({
+        type: 'user_not_found',
+        title: 'Faculty Account Not Found',
+        message: msg || `No registered account found matching "${currentIdentifier}".`,
+        identifier: currentIdentifier,
+      });
+    } else if (lower.includes('password') || lower.includes('credential')) {
+      setAuthError({
+        type: 'invalid_password',
+        title: 'Incorrect Password',
+        message: msg || 'The password entered is incorrect.',
+        identifier: currentIdentifier,
+      });
+    } else if (lower.includes('suspended')) {
+      setAuthError({
+        type: 'suspended',
+        title: 'Account Suspended',
+        message: msg,
+        identifier: currentIdentifier,
+      });
+    } else if (lower.includes('institution') || lower.includes('school') || lower.includes('belong')) {
+      setAuthError({
+        type: 'school_mismatch',
+        title: 'Institution Mismatch',
+        message: msg,
+        identifier: currentIdentifier,
+      });
+    } else {
+      setError(msg || 'Login failed. Please verify your credentials.');
+    }
+  };
+
   // Form submission login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim() || !password) {
       setError('Please enter your username/email and password.');
+      setAuthError(null);
       return;
     }
 
     setLoading(true);
     setError(null);
+    setAuthError(null);
     setSuccessMessage(null);
 
     const schoolCodeToSubmit = useCustomCode
@@ -107,13 +231,60 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
     try {
       const res = await api.login(identifier.trim(), password, device, schoolCodeToSubmit || undefined);
       setSuccessMessage(`Signed in as ${res.user.username} (${res.user.school_name || 'Govt Hr Sec School Pannaipuram'}). Loading dashboard...`);
+      setAuthError(null);
       setTimeout(() => {
         onLoginSuccess(res.user);
       }, 300);
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please verify your credentials.');
-      setLoading(false);
+      handleAuthError(err, identifier.trim());
     }
+  };
+
+  // Action helper: Try default password (staff123) and attempt instant sign in
+  const handleTryDefaultPassword = async () => {
+    const rawId = identifier.trim();
+    setPassword('staff123');
+    setShowPassword(true);
+    setAuthError(null);
+    setError(null);
+
+    if (rawId) {
+      setLoading(true);
+      const schoolCodeToSubmit = useCustomCode
+        ? customSchoolCodeInput.trim()
+        : selectedSchoolCode === 'ALL'
+        ? undefined
+        : selectedSchoolCode;
+
+      try {
+        const res = await api.login(rawId, 'staff123', device, schoolCodeToSubmit || undefined);
+        setSuccessMessage(`Signed in as ${res.user.username} (${res.user.school_name || 'Govt Hr Sec School Pannaipuram'}). Loading dashboard...`);
+        setTimeout(() => {
+          onLoginSuccess(res.user);
+        }, 300);
+      } catch (err: any) {
+        handleAuthError(err, rawId);
+      }
+    }
+  };
+
+  // Action helper: Switch straight to Teacher Registration with pre-filled identifier
+  const handleSwitchToRegister = () => {
+    setAuthMode('register');
+    setRegRole('teacher');
+    const raw = identifier.trim();
+    if (raw.includes('@')) {
+      setRegEmail(raw);
+      setRegUsername(raw.split('@')[0]);
+    } else if (raw) {
+      setRegUsername(raw);
+    }
+    if (selectedSchoolCode && selectedSchoolCode !== 'ALL') {
+      setRegSelectedSchoolCode(selectedSchoolCode);
+      setRegSchoolMode('existing');
+    }
+    setAuthError(null);
+    setError(null);
   };
 
   // Registration handler for new Teacher accounts
@@ -239,6 +410,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
               onClick={() => {
                 setAuthMode('login');
                 setError(null);
+                setAuthError(null);
                 setSuccessMessage(null);
               }}
               className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
@@ -256,6 +428,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
               onClick={() => {
                 setAuthMode('register');
                 setError(null);
+                setAuthError(null);
                 setSuccessMessage(null);
               }}
               className={`flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
@@ -269,8 +442,273 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
             </button>
           </div>
 
-          {/* Feedback Alerts */}
-          {error && (
+          {/* SPECIFIC USER-FRIENDLY ERROR BANNERS */}
+          {/* 1. USER NOT FOUND */}
+          {authError && authError.type === 'user_not_found' && (
+            <div className="mb-5 p-4 rounded-2xl bg-gradient-to-br from-amber-950/70 via-slate-900/90 to-amber-950/40 border border-amber-500/60 text-amber-100 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5">
+                  <UserX className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-bold text-amber-200 flex items-center gap-2">
+                      <span>{authError.title}</span>
+                    </h4>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">
+                        Not Enrolled
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAuthError(null)}
+                        className="text-amber-400 hover:text-amber-200 p-0.5 rounded cursor-pointer"
+                        title="Dismiss alert"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-amber-200/90 mt-1.5 leading-relaxed">
+                    No registered faculty account was found matching <strong className="text-white bg-slate-950 px-1.5 py-0.5 rounded border border-amber-900/60 font-mono">"{authError.identifier || identifier}"</strong>.
+                  </p>
+
+                  <div className="mt-3 p-3 rounded-xl bg-slate-950/70 border border-amber-900/50 space-y-2 text-xs">
+                    <div className="font-semibold text-amber-300 flex items-center gap-1.5">
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>Troubleshooting Guide for Teachers:</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-300 text-[11px] leading-relaxed pl-1">
+                      <li>
+                        <strong className="text-white">Check for typos:</strong> Verify that your faculty username or email was spelled correctly (e.g., <span className="text-indigo-300">vadivubiochem@gmail.com</span> or <span className="text-indigo-300">Sundar</span>).
+                      </li>
+                      <li>
+                        <strong className="text-white">School Selection:</strong> If you selected a specific school in the dropdown, verify that it matches your assigned campus, or select <span className="text-indigo-300">Auto-Detect School by Account</span>.
+                      </li>
+                      <li>
+                        <strong className="text-white">New to the School?</strong> If your profile hasn't been set up yet, you can register a new Teacher account right now or contact your administrator.
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* Direct Action Buttons */}
+                  <div className="mt-3.5 flex flex-wrap items-center gap-2 pt-2 border-t border-amber-800/40">
+                    <button
+                      type="button"
+                      onClick={handleSwitchToRegister}
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>Create Teacher Account</span>
+                    </button>
+
+                    {selectedSchoolCode !== 'ALL' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSchoolCode('ALL');
+                          setUseCustomCode(false);
+                          setAuthError(null);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
+                      >
+                        <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Use Auto-Detect School</span>
+                      </button>
+                    )}
+
+                    <a
+                      href={`mailto:pssofttech@gmail.com?subject=Teacher%20Hub%20Account%20Enrollment%20Request%20(${encodeURIComponent(authError.identifier || '')})`}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700 ml-auto"
+                    >
+                      <Mail className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Contact Admin (pssofttech@gmail.com)</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. INVALID PASSWORD */}
+          {authError && authError.type === 'invalid_password' && (
+            <div className="mb-5 p-4 rounded-2xl bg-gradient-to-br from-rose-950/70 via-slate-900/90 to-amber-950/40 border border-rose-500/60 text-rose-100 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0 mt-0.5">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-bold text-rose-200 flex items-center gap-2">
+                      <span>{authError.title}</span>
+                    </h4>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold">
+                        Wrong Password
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAuthError(null)}
+                        className="text-rose-400 hover:text-rose-200 p-0.5 rounded cursor-pointer"
+                        title="Dismiss alert"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-rose-200/90 mt-1.5 leading-relaxed">
+                    {authError.message}
+                  </p>
+
+                  {/* Account Found Confirmation Pill */}
+                  <div className="mt-2.5 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span className="text-slate-300 font-medium">Verified Account:</span>
+                      <span className="text-white font-bold bg-slate-800 px-2 py-0.5 rounded">
+                        {authError.foundUser?.username || authError.identifier}
+                      </span>
+                    </div>
+                    <span className="text-slate-400 text-[11px] font-medium flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>{authError.foundUser?.school_name || 'Govt Hr Sec School Pannaipuram'}</span>
+                    </span>
+                  </div>
+
+                  <div className="mt-3 p-3 rounded-xl bg-slate-950/70 border border-rose-900/50 space-y-2 text-xs">
+                    <div className="font-semibold text-rose-300 flex items-center gap-1.5">
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>Teacher Password Help &amp; Recovery:</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-slate-300 text-[11px] leading-relaxed pl-1">
+                      <li>
+                        <strong className="text-white">Default School Password:</strong> All faculty accounts are initially assigned the default password: <code className="font-mono bg-indigo-950 px-1.5 py-0.5 rounded text-indigo-300 font-bold border border-indigo-700">staff123</code>
+                      </li>
+                      <li>
+                        <strong className="text-white">Case Sensitivity:</strong> Passwords are case-sensitive. Please make sure <strong className="text-white">Caps Lock</strong> is turned off.
+                      </li>
+                      <li>
+                        <strong className="text-white">Reset Account Password:</strong> If you configured a custom password and cannot recall it, click <em>Reset Password</em> below to generate a new credentials token.
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* Direct Action Buttons */}
+                  <div className="mt-3.5 flex flex-wrap items-center gap-2 pt-2 border-t border-rose-800/40">
+                    <button
+                      type="button"
+                      onClick={handleTryDefaultPassword}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
+                      title="Fill password with staff123 and sign in"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Sign In with Default Password (staff123)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetEmail = authError.foundUser?.email || (identifier.includes('@') ? identifier.trim() : '');
+                        setForgotEmail(targetEmail);
+                        setForgotOpen(true);
+                        setForgotStep('request');
+                        setForgotSuccessMsg(null);
+                        setAuthError(null);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Reset Password</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700 ml-auto"
+                    >
+                      {showPassword ? <EyeOff className="w-3.5 h-3.5 text-slate-400" /> : <Eye className="w-3.5 h-3.5 text-slate-400" />}
+                      <span>{showPassword ? 'Hide' : 'Reveal'} Password</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 3. INSTITUTION MISMATCH */}
+          {authError && authError.type === 'school_mismatch' && (
+            <div className="mb-5 p-4 rounded-2xl bg-gradient-to-br from-indigo-950/70 via-slate-900/90 to-purple-950/40 border border-indigo-500/60 text-indigo-100 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shrink-0 mt-0.5">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-bold text-indigo-200 flex items-center gap-2">
+                      <span>{authError.title}</span>
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => setAuthError(null)}
+                      className="text-indigo-400 hover:text-indigo-200 p-0.5 rounded cursor-pointer"
+                      title="Dismiss alert"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-indigo-200/90 mt-1.5 leading-relaxed">
+                    {authError.message}
+                  </p>
+
+                  <div className="mt-3.5 flex flex-wrap items-center gap-2 pt-2 border-t border-indigo-800/40">
+                    {authError.suggestedSchoolCode && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSchoolCode(authError.suggestedSchoolCode!);
+                          setUseCustomCode(false);
+                          setAuthError(null);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
+                      >
+                        <Building2 className="w-3.5 h-3.5" />
+                        <span>Switch to {authError.suggestedSchoolName || authError.suggestedSchoolCode}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSchoolCode('ALL');
+                        setUseCustomCode(false);
+                        setAuthError(null);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
+                    >
+                      <span>Set to Auto-Detect School</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 4. SUSPENDED OR GENERAL ERROR */}
+          {authError && (authError.type === 'suspended' || authError.type === 'general') && (
+            <div className="mb-5 p-3.5 rounded-xl bg-rose-950/70 border border-rose-800 text-rose-200 text-sm flex items-start gap-2.5 animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div className="leading-snug">
+                <div className="font-semibold text-rose-300 mb-0.5">{authError.title}</div>
+                <div>{authError.message}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Regular standard alert fallback */}
+          {error && !authError && (
             <div className="mb-5 p-3.5 rounded-xl bg-rose-950/70 border border-rose-800 text-rose-200 text-sm flex items-start gap-2.5 animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
               <div className="leading-snug">{error}</div>
@@ -440,6 +878,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, onDeviceChan
                         setIdentifier('');
                         setPassword('');
                         setError(null);
+                        setAuthError(null);
                       }}
                       className="text-xs text-slate-400 hover:text-rose-300 transition-colors cursor-pointer flex items-center gap-1"
                     >

@@ -192,7 +192,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       await api.createAdminUser({
         username: newUsername.trim(),
         email: newEmail.trim(),
-        password: newPassword || 'admin123',
+        password: newPassword || 'staff123',
         role: newRole,
         department: newDept.trim() || (newRole === 'admin' ? 'System Administration' : 'General Faculty'),
         storage_limit: Math.round(newQuotaGB * 1024 * 1024 * 1024),
@@ -2592,9 +2592,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <form onSubmit={handleResetPassword} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">New Security Password</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-300">New Security Password</label>
+                  <button
+                    type="button"
+                    onClick={() => setResetPasswordVal('staff123')}
+                    className="text-[11px] text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                  >
+                    Use default (staff123)
+                  </button>
+                </div>
                 <input
-                  type="password"
+                  type="text"
                   required
                   value={resetPasswordVal}
                   onChange={(e) => setResetPasswordVal(e.target.value)}

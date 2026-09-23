@@ -92,6 +92,87 @@ export const INITIAL_USERS: User[] = [
     storage_used: 0,
     storage_limit: 16106127360, // 15 GB
     created_at: '2026-03-01T08:00:00.000Z',
+    password: 'staff123',
+    permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
+  },
+  {
+    id: 'usr_mudm98xd',
+    schoolId: 'SCH_PANNAIPURAM',
+    school_name: 'Govt Hr Sec School Pannaipuram',
+    school_code: 'STATE-405',
+    username: 'Ramaraj',
+    email: 'ramaraj22feb89@gmail.com',
+    role: 'teacher',
+    status: 'active',
+    department: 'General Faculty',
+    storage_used: 0,
+    storage_limit: 16106127360,
+    created_at: '2026-03-05T08:00:00.000Z',
+    password: 'staff123',
+    permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
+  },
+  {
+    id: 'usr_mudnn6c0',
+    schoolId: 'SCH_PANNAIPURAM',
+    school_name: 'Govt Hr Sec School Pannaipuram',
+    school_code: 'STATE-405',
+    username: 'Saravanababu',
+    email: 'mohaniranj1930@gmail.com',
+    role: 'teacher',
+    status: 'active',
+    department: 'General Faculty',
+    storage_used: 0,
+    storage_limit: 16106127360,
+    created_at: '2026-03-05T08:00:00.000Z',
+    password: 'staff123',
+    permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
+  },
+  {
+    id: 'usr_mudnvf3b',
+    schoolId: 'SCH_PANNAIPURAM',
+    school_name: 'Govt Hr Sec School Pannaipuram',
+    school_code: 'STATE-405',
+    username: 'Anbazhagan',
+    email: 'anbazhagansankar813@gmail.com',
+    role: 'teacher',
+    status: 'active',
+    department: 'General Faculty',
+    storage_used: 0,
+    storage_limit: 16106127360,
+    created_at: '2026-03-05T08:00:00.000Z',
+    password: 'staff123',
+    permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
+  },
+  {
+    id: 'usr_mudo87xf',
+    schoolId: 'SCH_PANNAIPURAM',
+    school_name: 'Govt Hr Sec School Pannaipuram',
+    school_code: 'STATE-405',
+    username: 'Sundar',
+    email: 'sundarmms1985@gmail.com',
+    role: 'teacher',
+    status: 'active',
+    department: 'General Faculty',
+    storage_used: 0,
+    storage_limit: 16106127360,
+    created_at: '2026-03-05T08:00:00.000Z',
+    password: 'staff123',
+    permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
+  },
+  {
+    id: 'usr_mudq8v22',
+    schoolId: 'SCH_PANNAIPURAM',
+    school_name: 'Govt Hr Sec School Pannaipuram',
+    school_code: 'STATE-405',
+    username: 'Ramesh',
+    email: 'hss1603007@gmail.com',
+    role: 'teacher',
+    status: 'active',
+    department: 'General Faculty',
+    storage_used: 0,
+    storage_limit: 16106127360,
+    created_at: '2026-03-05T08:00:00.000Z',
+    password: 'staff123',
     permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
   },
 ];
@@ -145,7 +226,25 @@ const DEFAULT_PASSWORDS: Record<string, string[]> = {
   usr_pssofttech: ['admin123', 'password123', 'pssofttech', 'pssofttech@gmail.com', 'admin'],
   usr_vadivubichem: ['admin123', 'password123', 'vadivubichem', 'vadivubichem@gmail.com', 'vadivubiochem', 'teacher'],
   usr_emal: ['admin123', 'email password', 'emal', 'password123'],
-  usr_ramamoorthy: ['admin123', 'password123', 'moorthyagri84@gmail.com', 'ramamoorthy'],
+  usr_ramamoorthy: ['staff123', 'admin123', 'password123', 'moorthyagri84@gmail.com', 'ramamoorthy'],
+  usr_mudhd75e: ['staff123', 'admin123', 'password123', 'moorthyagri84@gmail.com', 'ramamoorthy'],
+  usr_mudm98xd: ['staff123', 'admin123', 'password123', 'ramaraj22feb89@gmail.com', 'ramaraj'],
+  usr_mudnn6c0: ['staff123', 'admin123', 'password123', 'mohaniranj1930@gmail.com', 'saravanababu'],
+  usr_mudnvf3b: ['staff123', 'admin123', 'password123', 'anbazhagansankar813@gmail.com', 'anbazhagan'],
+  usr_mudo87xf: ['staff123', 'admin123', 'password123', 'sundarmms1985@gmail.com', 'sundar'],
+  usr_mudq8v22: ['staff123', 'admin123', 'password123', 'hss1603007@gmail.com', 'ramesh'],
+  'moorthyagri84@gmail.com': ['staff123', 'admin123'],
+  'ramaraj22feb89@gmail.com': ['staff123', 'admin123'],
+  'mohaniranj1930@gmail.com': ['staff123', 'admin123'],
+  'anbazhagansankar813@gmail.com': ['staff123', 'admin123'],
+  'sundarmms1985@gmail.com': ['staff123', 'admin123'],
+  'hss1603007@gmail.com': ['staff123', 'admin123'],
+  sundar: ['staff123', 'admin123'],
+  ramaraj: ['staff123', 'admin123'],
+  saravanababu: ['staff123', 'admin123'],
+  anbazhagan: ['staff123', 'admin123'],
+  ramamesh: ['staff123', 'admin123'],
+  ramamoorthy: ['staff123', 'admin123'],
 };
 
 export function getStoredPasswords(): Record<string, string[]> {
@@ -891,8 +990,11 @@ export class LocalStore {
         localUsers[idx] = { ...localUsers[idx], ...cu };
         modified = true;
       }
-      if (cu.password) {
-        saveStoredPassword(cu.id, cu.password);
+      const teacherPw = cu.password || (cu.role === 'teacher' ? 'staff123' : undefined);
+      if (teacherPw) {
+        saveStoredPassword(cu.id, teacherPw);
+        if (cu.email) saveStoredPassword(cu.email.toLowerCase().trim(), teacherPw);
+        if (cu.username) saveStoredPassword(cu.username.toLowerCase().trim(), teacherPw);
       }
     }
 

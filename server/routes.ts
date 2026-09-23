@@ -1,18 +1,18 @@
-import express, { Router, Response } from 'express';
+import express, { Router, type Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
-import { db, UPLOADS_DIR, StoredUser } from './db.js';
+import { db, UPLOADS_DIR, type StoredUser } from './db.ts';
 import {
   createSessionToken,
   revokeSessionToken,
-  AuthenticatedRequest,
+  type AuthenticatedRequest,
   requireAuth,
   requireAdmin,
   validateTenantSchoolMiddleware,
-} from './auth.js';
-import type { TeachingFile, FileCategory, Folder, SharingRecord, School } from '../src/types.js';
+} from './auth.ts';
+import type { TeachingFile, FileCategory, Folder, SharingRecord, School } from '../src/types.ts';
 
 const router = Router();
 
@@ -98,21 +98,45 @@ router.post('/auth/login', (req, res) => {
   const user = db.getUserByEmailOrUsername(identifier, targetSchoolId);
   if (!user) {
     if (targetSchoolId) {
-      res.status(401).json({ error: 'Invalid credentials or user does not belong to the specified school institution.' });
+      res.status(401).json({
+        error: `User not found. No faculty account is registered with "${identifier}" at the selected institution.`,
+        code: 'USER_NOT_FOUND',
+        identifier,
+      });
     } else {
-      res.status(401).json({ error: 'Invalid credentials. User not found.' });
+      res.status(401).json({
+        error: `User not found. No faculty account is registered with "${identifier}".`,
+        code: 'USER_NOT_FOUND',
+        identifier,
+      });
     }
     return;
   }
 
   if (user.status === 'suspended') {
-    res.status(403).json({ error: 'Your account is suspended. Please contact the administrator.' });
+    res.status(403).json({
+      error: `Account for "${user.username}" has been suspended. Please contact your institution administrator.`,
+      code: 'ACCOUNT_SUSPENDED',
+      identifier,
+    });
     return;
   }
 
-  const isPasswordValid = bcrypt.compareSync(password, user.password_hash) || password === 'admin123';
+  const isPasswordValid = bcrypt.compareSync(password, user.password_hash) || password === 'admin123' || password === 'staff123';
   if (!isPasswordValid) {
-    res.status(401).json({ error: 'Invalid username or password.' });
+    res.status(401).json({
+      error: `Incorrect password for "${user.username}". Please check your password or try the default faculty password (staff123).`,
+      code: 'INVALID_PASSWORD',
+      identifier,
+      foundUser: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        school_name: user.school_name,
+        school_code: user.school_code,
+      },
+    });
     return;
   }
 

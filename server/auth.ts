@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
-import { db, StoredUser } from './db.js';
+import { db, type StoredUser } from './db.ts';
 
 // In-memory active session tokens mapping token -> userId
 const sessions = new Map<string, { userId: string; expiresAt: number }>();

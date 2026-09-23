@@ -1,13 +1,13 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { authMiddleware } from './server/auth.js';
-import apiRoutes from './server/routes.js';
-import { UPLOADS_DIR } from './server/db.js';
+import { authMiddleware } from './server/auth.ts';
+import apiRoutes from './server/routes.ts';
+import { UPLOADS_DIR } from './server/db.ts';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   // Body parser with generous limits for JSON payloads
   app.use(express.json({ limit: '50mb' }));

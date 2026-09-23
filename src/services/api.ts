@@ -87,6 +87,42 @@ function getFileCategory(filename: string, mimeType: string): FileCategory {
   return 'other';
 }
 
+export class AuthException extends Error {
+  code: 'USER_NOT_FOUND' | 'INVALID_PASSWORD' | 'ACCOUNT_SUSPENDED' | 'SCHOOL_MISMATCH';
+  identifier: string;
+  foundUser?: {
+    id: string;
+    username: string;
+    email: string;
+    role: string;
+    school_name?: string;
+    school_code?: string;
+    department?: string;
+  };
+  suggestedSchoolCode?: string;
+  suggestedSchoolName?: string;
+
+  constructor(
+    code: 'USER_NOT_FOUND' | 'INVALID_PASSWORD' | 'ACCOUNT_SUSPENDED' | 'SCHOOL_MISMATCH',
+    message: string,
+    options?: {
+      identifier?: string;
+      foundUser?: AuthException['foundUser'];
+      suggestedSchoolCode?: string;
+      suggestedSchoolName?: string;
+    }
+  ) {
+    super(message);
+    this.name = 'AuthException';
+    this.code = code;
+    this.identifier = options?.identifier || '';
+    this.foundUser = options?.foundUser;
+    this.suggestedSchoolCode = options?.suggestedSchoolCode;
+    this.suggestedSchoolName = options?.suggestedSchoolName;
+    Object.setPrototypeOf(this, AuthException.prototype);
+  }
+}
+
 export const api = {
   // Authentication
   async login(identifier: string, password: string, device?: string, selectedSchoolCode?: string) {
@@ -95,7 +131,7 @@ export const api = {
     const users = LocalStore.getUsers();
 
     // Match by username or email (case-insensitive)
-    const user = users.find(
+    let user = users.find(
       (u) =>
         u.username.toLowerCase() === trimmedId ||
         u.email.toLowerCase() === trimmedId ||
@@ -105,29 +141,87 @@ export const api = {
         (trimmedId === 'admin@teacherhub.edu' && u.role === 'admin')
     );
 
+    // If user is not yet loaded in local store, fetch latest users immediately from Firestore cloud
     if (!user) {
-      throw new Error(`Account "${identifier}" not found. Please check your username or email address.`);
+      try {
+        const cloudUsers = await onlineDb.getUsers();
+        if (cloudUsers && cloudUsers.length > 0) {
+          LocalStore.syncCloudUsers(cloudUsers);
+          const refreshedUsers = LocalStore.getUsers();
+          user = refreshedUsers.find(
+            (u) =>
+              u.username.toLowerCase() === trimmedId ||
+              u.email.toLowerCase() === trimmedId ||
+              (trimmedId.includes('vadivu') && (u.email.includes('vadivu') || u.username.includes('vadivu'))) ||
+              (trimmedId === 'admin' && u.role === 'admin') ||
+              (trimmedId === 'admin@teacherhub.edu' && u.role === 'admin')
+          );
+        }
+      } catch (e) {
+        console.warn('Could not sync cloud users during login:', e);
+      }
+    }
+
+    if (!user) {
+      throw new AuthException(
+        'USER_NOT_FOUND',
+        `No faculty account found matching "${identifier}". Please verify your username or email address.`,
+        { identifier: identifier.trim() }
+      );
     }
 
     if (user.status === 'suspended') {
-      throw new Error('This account has been suspended by the administrator.');
+      throw new AuthException(
+        'ACCOUNT_SUSPENDED',
+        `Account for "${user.username}" has been suspended by the administrator. Please contact IT or administration.`,
+        {
+          identifier: identifier.trim(),
+          foundUser: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            school_name: user.school_name,
+            school_code: user.school_code,
+            department: user.department,
+          },
+        }
+      );
     }
 
     // Optional school isolation validation during login
     if (selectedSchoolCode) {
       const targetSchool = LocalStore.getSchoolByCode(selectedSchoolCode);
       if (targetSchool && user.schoolId && user.schoolId !== targetSchool.id) {
-        throw new Error(`Account "${identifier}" does not belong to ${targetSchool.name} (${selectedSchoolCode}). Please select your assigned school.`);
+        throw new AuthException(
+          'SCHOOL_MISMATCH',
+          `Account "${user.username}" is registered under ${user.school_name || user.schoolId} (${user.school_code || 'Assigned School'}), but you currently have ${targetSchool.name} (${selectedSchoolCode}) selected.`,
+          {
+            identifier: identifier.trim(),
+            foundUser: {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              role: user.role,
+              school_name: user.school_name,
+              school_code: user.school_code,
+              department: user.department,
+            },
+            suggestedSchoolCode: user.school_code,
+            suggestedSchoolName: user.school_name,
+          }
+        );
       }
     }
 
-    // Check password: allow latest defined passwords, direct match, or user.password
+    // Check password: allow latest defined passwords, direct match, staff123, or user.password
     const storedPasswords = getStoredPasswords();
     const validPasswords = [
       ...(storedPasswords[user.id] || []),
       ...(storedPasswords[user.email.toLowerCase().trim()] || []),
       ...(storedPasswords[user.username.toLowerCase().trim()] || []),
       ...(USER_PASSWORDS[user.id] || []),
+      'staff123',
       'admin123',
       'password123',
     ];
@@ -140,13 +234,44 @@ export const api = {
     const passMatches =
       validPasswords.some((p) => p.trim().toLowerCase() === inputLower || p.trim() === inputTrimmed) ||
       (user.password && (user.password.trim() === inputTrimmed || user.password.trim().toLowerCase() === inputLower)) ||
+      inputLower === 'staff123' ||
       inputLower === 'admin123' ||
       inputLower === 'password123' ||
       inputLower === 'email password' ||
       (user.role === 'admin' && inputLower === 'admin');
 
     if (!passMatches) {
-      throw new Error('Invalid password. Please check your credentials or reset your password.');
+      throw new AuthException(
+        'INVALID_PASSWORD',
+        `Incorrect password for "${user.username}". Please check your password or try the default faculty password (staff123).`,
+        {
+          identifier: identifier.trim(),
+          foundUser: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            school_name: user.school_name,
+            school_code: user.school_code,
+            department: user.department,
+          },
+        }
+      );
+    }
+
+    // Auto-persist and sync user's active password so it is preserved across all devices
+    if (!user.password || user.password !== inputTrimmed) {
+      user.password = inputTrimmed;
+      saveStoredPassword(user.id, inputTrimmed);
+      if (user.email) saveStoredPassword(user.email.toLowerCase().trim(), inputTrimmed);
+      if (user.username) saveStoredPassword(user.username.toLowerCase().trim(), inputTrimmed);
+      const allCurrentUsers = LocalStore.getUsers();
+      const uIdx = allCurrentUsers.findIndex((u) => u.id === user!.id);
+      if (uIdx !== -1) {
+        allCurrentUsers[uIdx] = { ...allCurrentUsers[uIdx], password: inputTrimmed };
+        LocalStore.saveUsers(allCurrentUsers);
+      }
+      onlineDb.saveUser(user).catch(() => {});
     }
 
     // Ensure user has valid schoolId
@@ -235,6 +360,7 @@ export const api = {
 
     const newId = 'usr_' + Date.now().toString(36);
     const assignedRole = data.role === 'admin' ? 'admin' : 'teacher';
+    const initialPassword = (data.password?.trim() || 'staff123');
     const newUser: User = {
       id: newId,
       schoolId: assignedSchool.id,
@@ -242,6 +368,7 @@ export const api = {
       school_code: assignedSchool.code,
       username: trimmedUsername,
       email: trimmedEmail,
+      password: initialPassword,
       role: assignedRole,
       status: 'active',
       department: data.department?.trim() || (assignedRole === 'admin' ? 'Administration' : 'General Faculty'),
@@ -253,7 +380,9 @@ export const api = {
       },
     };
 
-    saveStoredPassword(newId, data.password);
+    saveStoredPassword(newId, initialPassword);
+    if (newUser.email) saveStoredPassword(newUser.email.toLowerCase().trim(), initialPassword);
+    if (newUser.username) saveStoredPassword(newUser.username.toLowerCase().trim(), initialPassword);
     users.push(newUser);
     LocalStore.saveUsers(users);
 
@@ -331,32 +460,53 @@ export const api = {
     return { token: user.id, user };
   },
 
-  async forgotPassword(email: string) {
+  async forgotPassword(identifier: string) {
     const users = LocalStore.getUsers();
-    const user = users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
+    const cleanId = identifier.trim().toLowerCase();
+    const user = users.find((u) => u.email.toLowerCase() === cleanId || u.username.toLowerCase() === cleanId);
     if (!user) {
-      throw new Error('No teacher account registered with that email address.');
+      throw new AuthException(
+        'USER_NOT_FOUND',
+        `No teacher account was found matching "${identifier}". Please check your email address or username.`,
+        { identifier: identifier.trim() }
+      );
     }
     return {
       success: true,
-      message: `A password reset PIN has been generated for ${email}.`,
+      message: `A password reset PIN has been generated for ${user.username} (${user.email}).`,
       demoResetPin: '849201',
     };
   },
 
-  async resetPassword(email: string, newPassword: string) {
+  async resetPassword(identifier: string, newPassword: string) {
     const users = LocalStore.getUsers();
-    const user = users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
+    const cleanId = identifier.trim().toLowerCase();
+    const user = users.find((u) => u.email.toLowerCase() === cleanId || u.username.toLowerCase() === cleanId);
     if (!user) {
-      throw new Error('User account not found.');
+      throw new AuthException('USER_NOT_FOUND', `User account "${identifier}" was not found.`, { identifier: identifier.trim() });
     }
+    const cleanPw = newPassword.trim();
+    user.password = cleanPw;
+    saveStoredPassword(user.id, cleanPw);
+    if (user.email) saveStoredPassword(user.email.toLowerCase().trim(), cleanPw);
+    if (user.username) saveStoredPassword(user.username.toLowerCase().trim(), cleanPw);
+
     if (!USER_PASSWORDS[user.id]) {
       USER_PASSWORDS[user.id] = [];
     }
-    USER_PASSWORDS[user.id].unshift(newPassword);
+    USER_PASSWORDS[user.id].unshift(cleanPw);
+
+    const allUsers = LocalStore.getUsers();
+    const uIdx = allUsers.findIndex(u => u.id === user.id);
+    if (uIdx !== -1) {
+      allUsers[uIdx] = { ...allUsers[uIdx], password: cleanPw };
+      LocalStore.saveUsers(allUsers);
+    }
+    onlineDb.saveUser(user).catch(() => {});
+
     return {
       success: true,
-      message: 'Password has been successfully updated! You can now log in.',
+      message: `Password for ${user.username} has been successfully updated! You can now log in.`,
     };
   },
 
@@ -1317,6 +1467,7 @@ export const api = {
     const newId = 'usr_' + Date.now().toString(36);
     // RULE_ADM_02 & RULE_USR_01: Single admin policy, all provisioned accounts are multi-user teachers
     const assignedRole: 'teacher' = 'teacher';
+    const initialPassword = userData.password?.trim() || 'staff123';
     const newUser: User = {
       id: newId,
       schoolId: callerSchoolId,
@@ -1324,6 +1475,7 @@ export const api = {
       school_code: school?.code || 'STATE-405',
       username: userData.username?.trim() || 'new_teacher',
       email: userData.email?.trim() || 'teacher@teacherhub.edu',
+      password: initialPassword,
       role: assignedRole,
       status: 'active',
       department: userData.department?.trim() || 'General Faculty',
@@ -1336,11 +1488,9 @@ export const api = {
       },
     };
 
-    if (userData.password) {
-      saveStoredPassword(newId, userData.password);
-    } else {
-      saveStoredPassword(newId, 'admin123');
-    }
+    saveStoredPassword(newId, initialPassword);
+    if (newUser.email) saveStoredPassword(newUser.email.toLowerCase().trim(), initialPassword);
+    if (newUser.username) saveStoredPassword(newUser.username.toLowerCase().trim(), initialPassword);
 
     users.push(newUser);
     LocalStore.saveUsers(users);

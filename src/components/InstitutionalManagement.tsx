@@ -70,7 +70,7 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
   const [addTeacherModalOpen, setAddTeacherModalOpen] = useState(false);
   const [teacherUsername, setTeacherUsername] = useState('');
   const [teacherEmail, setTeacherEmail] = useState('');
-  const [teacherPassword, setTeacherPassword] = useState('admin123');
+  const [teacherPassword, setTeacherPassword] = useState('staff123');
   const [teacherDept, setTeacherDept] = useState('General Faculty');
   const [teacherQuotaGB, setTeacherQuotaGB] = useState<number>(15);
   const [teacherRole, setTeacherRole] = useState<'teacher' | 'admin'>('teacher');
@@ -244,7 +244,7 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
       await api.createAdminUser({
         username: teacherUsername.trim(),
         email: teacherEmail.trim(),
-        password: teacherPassword || 'admin123',
+        password: teacherPassword || 'staff123',
         role: teacherRole,
         department: teacherDept.trim() || 'General Faculty',
         storage_limit: Math.round(teacherQuotaGB * 1024 * 1024 * 1024),
@@ -259,7 +259,7 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
       setAddTeacherModalOpen(false);
       setTeacherUsername('');
       setTeacherEmail('');
-      setTeacherPassword('admin123');
+      setTeacherPassword('staff123');
       setTeacherDept('General Faculty');
       setTeacherQuotaGB(15);
       setTeacherRole('teacher');
@@ -1158,10 +1158,10 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
                   <label className="block text-xs font-medium text-slate-300">New Password</label>
                   <button
                     type="button"
-                    onClick={() => setNewPasswordVal('admin123')}
+                    onClick={() => setNewPasswordVal('staff123')}
                     className="text-[11px] text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
                   >
-                    Use default (admin123)
+                    Use default (staff123)
                   </button>
                 </div>
                 <input
