@@ -526,15 +526,6 @@
       "created_at": "2026-01-01T00:00:00.000Z"
     },
     {
-      "id": "SCH_STJOHNS",
-      "name": "St. John's Higher Secondary School",
-      "code": "SCH_STJOHNS",
-      "address": "88 Cathedral Road, South Wing",
-      "contact_email": "principal@stjohns.edu",
-      "storage_quota_bytes": 107374182400,
-      "created_at": "2026-02-01T00:00:00.000Z"
-    },
-    {
       "id": "SCH_GREENVALE",
       "name": "Greenvale Science & Tech Academy",
       "code": "SCH_GREENVALE",

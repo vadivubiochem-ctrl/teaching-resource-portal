@@ -369,6 +369,15 @@ export const onlineDb = {
     }
   },
 
+  async deleteSchool(id: string): Promise<void> {
+    try {
+      const schoolRef = doc(db, COLLECTIONS.SCHOOLS, id);
+      await deleteDoc(schoolRef);
+    } catch (err) {
+      console.warn('Firestore deleteSchool error:', err);
+    }
+  },
+
   // Audit Logs
   async saveAuditLog(log: AuditLog): Promise<void> {
     try {

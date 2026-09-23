@@ -31,15 +31,6 @@ export const DEFAULT_SCHOOLS: School[] = [
     storage_quota_bytes: 214748364800, // 200 GB
     admin_id: 'usr_pssofttech',
   },
-  {
-    id: 'SCH_STJOHNS',
-    code: 'STJOHN-303',
-    name: "St. John's Higher Secondary School",
-    address: '88 Cathedral Road, South Wing',
-    contact_email: 'principal@stjohns.edu',
-    created_at: '2026-02-01T09:00:00.000Z',
-    storage_quota_bytes: 107374182400, // 100 GB
-  },
 ];
 
 // Default Accounts: State Admin (pssofttech) and State Teacher (vadivubichem)
@@ -435,6 +426,28 @@ export class LocalStore {
     if (parsed.some((s) => s.id === 'SCH_RIVERSIDE' || s.code === 'RIVER-202' || (s.name || '').includes('Riverside'))) {
       parsed = parsed.filter(
         (s) => s.id !== 'SCH_RIVERSIDE' && s.code !== 'RIVER-202' && !(s.name || '').includes('Riverside')
+      );
+      changed = true;
+    }
+
+    // Remove St. John's Higher Secondary School (STJOHN-303) completely
+    if (
+      parsed.some(
+        (s) =>
+          s.id === 'SCH_STJOHNS' ||
+          s.code === 'STJOHN-303' ||
+          s.code === 'SCH_STJOHNS' ||
+          (s.name || '').toLowerCase().includes("st. john") ||
+          (s.name || '').toLowerCase().includes("st.john")
+      )
+    ) {
+      parsed = parsed.filter(
+        (s) =>
+          s.id !== 'SCH_STJOHNS' &&
+          s.code !== 'STJOHN-303' &&
+          s.code !== 'SCH_STJOHNS' &&
+          !(s.name || '').toLowerCase().includes("st. john") &&
+          !(s.name || '').toLowerCase().includes("st.john")
       );
       changed = true;
     }

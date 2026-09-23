@@ -42,15 +42,6 @@ function getInitialDatabase(): DatabaseSchema {
       created_at: '2026-01-01T00:00:00.000Z',
     },
     {
-      id: 'SCH_STJOHNS',
-      name: "St. John's Higher Secondary School",
-      code: 'SCH_STJOHNS',
-      address: '88 Cathedral Road, South Wing',
-      contact_email: 'principal@stjohns.edu',
-      storage_quota_bytes: 107374182400, // 100 GB
-      created_at: '2026-02-01T00:00:00.000Z',
-    },
-    {
       id: 'SCH_GREENVALE',
       name: 'Greenvale Science & Tech Academy',
       code: 'SCH_GREENVALE',
@@ -559,6 +550,20 @@ class Database {
             u.school_code !== 'RIVER-202' &&
             !u.email.includes('riverside.edu')
         );
+
+        // Filter out St. John's Higher Secondary School (STJOHN-303)
+        if (parsed.schools) {
+          parsed.schools = parsed.schools.filter(
+            (s) =>
+              s.id !== 'SCH_STJOHNS' &&
+              s.code !== 'STJOHN-303' &&
+              s.code !== 'SCH_STJOHNS' &&
+              !(s.name || '').toLowerCase().includes('st. john') &&
+              !(s.name || '').toLowerCase().includes('st.john') &&
+              s.id !== 'SCH_RIVERSIDE' &&
+              s.code !== 'RIVER-202'
+          );
+        }
 
         // Filter out permanently deleted user accounts across all devices
         parsed.users = parsed.users.filter(

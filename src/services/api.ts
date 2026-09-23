@@ -1401,9 +1401,33 @@ export const api = {
     try {
       const cloudSchools = await onlineDb.getSchools();
       if (cloudSchools && cloudSchools.length > 0) {
+        // Automatically purge St. John's from Firestore cloud if encountered
+        for (const cs of cloudSchools) {
+          if (
+            cs.id === 'SCH_STJOHNS' ||
+            cs.code === 'STJOHN-303' ||
+            cs.code === 'SCH_STJOHNS' ||
+            (cs.name || '').toLowerCase().includes('st. john') ||
+            (cs.name || '').toLowerCase().includes('st.john')
+          ) {
+            onlineDb.deleteSchool(cs.id).catch(() => {});
+          }
+        }
+
+        const validCloudSchools = cloudSchools.filter(
+          (cs) =>
+            cs.id !== 'SCH_STJOHNS' &&
+            cs.code !== 'STJOHN-303' &&
+            cs.code !== 'SCH_STJOHNS' &&
+            !(cs.name || '').toLowerCase().includes('st. john') &&
+            !(cs.name || '').toLowerCase().includes('st.john') &&
+            cs.id !== 'SCH_RIVERSIDE' &&
+            cs.code !== 'RIVER-202'
+        );
+
         const localSchools = LocalStore.getSchools();
         let changed = false;
-        for (const cs of cloudSchools) {
+        for (const cs of validCloudSchools) {
           const idx = localSchools.findIndex((s) => s.id === cs.id);
           if (idx === -1) {
             localSchools.push(cs);
