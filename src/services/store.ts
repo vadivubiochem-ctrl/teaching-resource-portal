@@ -79,6 +79,21 @@ export const INITIAL_USERS: User[] = [
     created_at: '2026-02-01T09:30:00.000Z',
     permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
   },
+  {
+    id: 'usr_ramamoorthy',
+    schoolId: 'SCH_PANNAIPURAM',
+    school_name: 'Govt Hr Sec School Pannaipuram',
+    school_code: 'STATE-405',
+    username: 'Ramamoorthy',
+    email: 'moorthyagri84@gmail.com',
+    role: 'teacher',
+    status: 'active',
+    department: 'Agricultural Science & Biology',
+    storage_used: 0,
+    storage_limit: 16106127360, // 15 GB
+    created_at: '2026-03-01T08:00:00.000Z',
+    permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
+  },
 ];
 
 // LocalStorage key for persistent passwords
@@ -130,6 +145,7 @@ const DEFAULT_PASSWORDS: Record<string, string[]> = {
   usr_pssofttech: ['admin123', 'password123', 'pssofttech', 'pssofttech@gmail.com', 'admin'],
   usr_vadivubichem: ['admin123', 'password123', 'vadivubichem', 'vadivubichem@gmail.com', 'vadivubiochem', 'teacher'],
   usr_emal: ['admin123', 'email password', 'emal', 'password123'],
+  usr_ramamoorthy: ['admin123', 'password123', 'moorthyagri84@gmail.com', 'ramamoorthy'],
 };
 
 export function getStoredPasswords(): Record<string, string[]> {
@@ -146,9 +162,7 @@ export function saveStoredPassword(userId: string, password: string): void {
   try {
     const current = getStoredPasswords();
     if (!current[userId]) current[userId] = [];
-    if (!current[userId].includes(password)) {
-      current[userId].unshift(password);
-    }
+    current[userId] = [password, ...current[userId].filter((p) => p.toLowerCase() !== password.toLowerCase())];
     localStorage.setItem(DB_PASSWORDS_KEY, JSON.stringify(current));
     USER_PASSWORDS[userId] = current[userId];
   } catch (e) {
@@ -876,6 +890,9 @@ export class LocalStore {
       } else {
         localUsers[idx] = { ...localUsers[idx], ...cu };
         modified = true;
+      }
+      if (cu.password) {
+        saveStoredPassword(cu.id, cu.password);
       }
     }
 

@@ -13,6 +13,7 @@ import { DEFAULT_TEACHER_PERMISSIONS } from '../types.js';
 import {
   LocalStore,
   USER_PASSWORDS,
+  getStoredPasswords,
   saveStoredPassword,
   storeBlob,
   getBlob,
@@ -49,6 +50,11 @@ export function setSimulatedDevice(device: string): void {
 export function validateTenantSchoolScope(targetSchoolId?: string, operation: string = 'data operation'): string {
   const currentUser = LocalStore.getSessionUser();
   const callerSchoolId = currentUser?.schoolId || 'SCH_PANNAIPURAM';
+
+  // Master Admin has institutional oversight across all schools
+  if (currentUser?.role === 'admin') {
+    return targetSchoolId || callerSchoolId;
+  }
 
   if (targetSchoolId && targetSchoolId !== callerSchoolId) {
     throw new Error(
@@ -115,14 +121,29 @@ export const api = {
       }
     }
 
-    // Check password: allow valid defined passwords or direct match
-    const validPasswords = USER_PASSWORDS[user.id] || ['admin123', 'password123'];
+    // Check password: allow latest defined passwords, direct match, or user.password
+    const storedPasswords = getStoredPasswords();
+    const validPasswords = [
+      ...(storedPasswords[user.id] || []),
+      ...(storedPasswords[user.email.toLowerCase().trim()] || []),
+      ...(storedPasswords[user.username.toLowerCase().trim()] || []),
+      ...(USER_PASSWORDS[user.id] || []),
+      'admin123',
+      'password123',
+    ];
+    if (user.password && !validPasswords.includes(user.password)) {
+      validPasswords.unshift(user.password);
+    }
+
+    const inputTrimmed = password.trim();
+    const inputLower = inputTrimmed.toLowerCase();
     const passMatches =
-      validPasswords.some((p) => p.toLowerCase() === password.trim().toLowerCase()) ||
-      password === 'admin' ||
-      password === 'admin123' ||
-      password === 'email password' ||
-      password === 'password123';
+      validPasswords.some((p) => p.trim().toLowerCase() === inputLower || p.trim() === inputTrimmed) ||
+      (user.password && (user.password.trim() === inputTrimmed || user.password.trim().toLowerCase() === inputLower)) ||
+      inputLower === 'admin123' ||
+      inputLower === 'password123' ||
+      inputLower === 'email password' ||
+      (user.role === 'admin' && inputLower === 'admin');
 
     if (!passMatches) {
       throw new Error('Invalid password. Please check your credentials or reset your password.');
@@ -1134,23 +1155,26 @@ export const api = {
   },
 
   async updateAdminUser(id: string, updates: Partial<User> & { password?: string }) {
-    const callerSchoolId = validateTenantSchoolScope();
     const users = LocalStore.getUsers();
     const idx = users.findIndex((u) => u.id === id);
     if (idx === -1) throw new Error('User not found');
 
-    if (users[idx].schoolId && users[idx].schoolId !== callerSchoolId) {
-      throw new Error('Access Denied: User belongs to another institution.');
-    }
-
     const currentUser = LocalStore.getSessionUser();
     const currentDevice = getSimulatedDevice();
     const targetUser = users[idx];
+    const targetSchoolId = targetUser.schoolId || 'SCH_PANNAIPURAM';
+
+    // Administrator has cross-school oversight; non-admins are restricted to their assigned school
+    if (currentUser?.role !== 'admin' && currentUser?.schoolId && targetSchoolId !== currentUser.schoolId) {
+      throw new Error('Access Denied: User belongs to another institution.');
+    }
+
     const isMasterAdmin =
       targetUser.id === 'usr_pssofttech' ||
       targetUser.email.toLowerCase() === 'pssofttech@gmail.com';
 
-    const { password, ...userFields } = updates;
+    const { password, ...otherFields } = updates;
+    const userFields: Partial<User> = { ...otherFields };
 
     // Protection for Single Master Administrator
     if (isMasterAdmin) {
@@ -1168,9 +1192,13 @@ export const api = {
     }
 
     if (password) {
+      userFields.password = password;
       saveStoredPassword(id, password);
+      if (targetUser.email) saveStoredPassword(targetUser.email.toLowerCase().trim(), password);
+      if (targetUser.username) saveStoredPassword(targetUser.username.toLowerCase().trim(), password);
+
       LocalStore.addAuditLog({
-        schoolId: callerSchoolId,
+        schoolId: targetSchoolId,
         user_id: currentUser?.id || 'usr_pssofttech',
         username: currentUser?.username || 'pssofttech',
         action: 'PASSWORD_RESET',
@@ -1184,7 +1212,7 @@ export const api = {
 
     if (userFields.role && userFields.role !== targetUser.role) {
       LocalStore.addAuditLog({
-        schoolId: callerSchoolId,
+        schoolId: targetSchoolId,
         user_id: currentUser?.id || 'usr_pssofttech',
         username: currentUser?.username || 'pssofttech',
         action: 'ROLE_CHANGED',
@@ -1198,7 +1226,7 @@ export const api = {
 
     if (userFields.status && userFields.status !== targetUser.status) {
       LocalStore.addAuditLog({
-        schoolId: callerSchoolId,
+        schoolId: targetSchoolId,
         user_id: currentUser?.id || 'usr_pssofttech',
         username: currentUser?.username || 'pssofttech',
         action: 'STATUS_CHANGED',
@@ -1217,7 +1245,7 @@ export const api = {
       };
       userFields.permissions = mergedPerms;
       LocalStore.addAuditLog({
-        schoolId: callerSchoolId,
+        schoolId: targetSchoolId,
         user_id: currentUser?.id || 'usr_pssofttech',
         username: currentUser?.username || 'pssofttech',
         action: 'PERMISSIONS_UPDATED',
@@ -1231,7 +1259,7 @@ export const api = {
 
     if (userFields.storage_limit && userFields.storage_limit !== targetUser.storage_limit) {
       LocalStore.addAuditLog({
-        schoolId: callerSchoolId,
+        schoolId: targetSchoolId,
         user_id: currentUser?.id || 'usr_pssofttech',
         username: currentUser?.username || 'pssofttech',
         action: 'QUOTA_UPDATED',
@@ -1246,9 +1274,22 @@ export const api = {
     users[idx] = { ...users[idx], ...userFields };
     LocalStore.saveUsers(users);
 
-    // Sync to Firestore & broadcast
-    onlineDb.saveUser(users[idx]).catch(() => {});
+    // Sync to Firestore & broadcast to all connected devices
+    try {
+      await onlineDb.saveUser(users[idx]);
+    } catch (err) {
+      console.warn('Firestore onlineDb.saveUser error:', err);
+    }
     syncManager.emit('user-updated', { user: users[idx] });
+
+    // Also attempt backend server sync if running in fullstack mode
+    try {
+      fetch(`/api/admin/users/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...updates, password }),
+      }).catch(() => {});
+    } catch {}
 
     return { user: users[idx] };
   },

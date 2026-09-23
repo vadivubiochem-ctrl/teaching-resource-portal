@@ -83,6 +83,8 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
   // Password reset modal
   const [resetTeacher, setResetTeacher] = useState<User | null>(null);
   const [newPasswordVal, setNewPasswordVal] = useState('');
+  const [resetTeacherLoading, setResetTeacherLoading] = useState(false);
+  const [resetModalError, setResetModalError] = useState<string | null>(null);
 
   // Delete teacher modal
   const [deleteModalTeacher, setDeleteModalTeacher] = useState<User | null>(null);
@@ -314,15 +316,25 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
   // Handle Reset Password
   const handleSaveResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetTeacher || !newPasswordVal) return;
+    if (!resetTeacher || !newPasswordVal.trim()) return;
 
+    setResetTeacherLoading(true);
+    setResetModalError(null);
     try {
-      await api.updateAdminUser(resetTeacher.id, { password: newPasswordVal });
-      setBanner({ type: 'success', text: `Password successfully reset for ${resetTeacher.username}.` });
+      await api.updateAdminUser(resetTeacher.id, { password: newPasswordVal.trim() });
+      setBanner({
+        type: 'success',
+        text: `Security password successfully updated for ${resetTeacher.username} (${resetTeacher.email}). Credentials synced across cloud and devices.`,
+      });
       setResetTeacher(null);
       setNewPasswordVal('');
+      await loadData(selectedSchoolId);
+      if (onRefresh) onRefresh();
     } catch (err: any) {
-      setBanner({ type: 'error', text: err.message });
+      setResetModalError(err.message || 'Failed to update security password.');
+      setBanner({ type: 'error', text: err.message || 'Failed to update security password.' });
+    } finally {
+      setResetTeacherLoading(false);
     }
   };
 
@@ -729,7 +741,8 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
                             type="button"
                             onClick={() => {
                               setResetTeacher(u);
-                              setNewPasswordVal('admin123');
+                              setResetModalError(null);
+                              setNewPasswordVal(u.password || '');
                             }}
                             className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors cursor-pointer"
                             title="Reset Teacher Password"
@@ -1114,38 +1127,79 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
-              <div className="font-bold text-white text-base">Reset Password: {resetTeacher.username}</div>
-              <button onClick={() => setResetTeacher(null)} className="text-slate-400 hover:text-white cursor-pointer">
+              <div>
+                <div className="font-bold text-white text-base flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-amber-400" />
+                  <span>Reset Password</span>
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  {resetTeacher.username} ({resetTeacher.email})
+                </div>
+              </div>
+              <button
+                onClick={() => setResetTeacher(null)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+                disabled={resetTeacherLoading}
+              >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveResetPassword} className="space-y-3.5">
+            {resetModalError && (
+              <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{resetModalError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveResetPassword} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">New Password</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-300">New Password</label>
+                  <button
+                    type="button"
+                    onClick={() => setNewPasswordVal('admin123')}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                  >
+                    Use default (admin123)
+                  </button>
+                </div>
                 <input
                   type="text"
                   required
                   value={newPasswordVal}
                   onChange={(e) => setNewPasswordVal(e.target.value)}
                   placeholder="Enter new password"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs font-mono focus:ring-2 focus:ring-indigo-500"
+                  disabled={resetTeacherLoading}
+                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Once updated, this teacher can sign in immediately on mobile and desktop using this new password.
+                </p>
               </div>
 
               <div className="pt-2 flex justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setResetTeacher(null)}
-                  className="px-4 py-2 bg-slate-700 text-slate-300 text-xs font-medium rounded-xl hover:bg-slate-600 cursor-pointer"
+                  disabled={resetTeacherLoading}
+                  className="px-4 py-2 bg-slate-700 text-slate-300 text-xs font-medium rounded-xl hover:bg-slate-600 cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-500 shadow-md cursor-pointer"
+                  disabled={resetTeacherLoading || !newPasswordVal.trim()}
+                  className="px-5 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-500 shadow-md cursor-pointer disabled:opacity-50 flex items-center gap-2"
                 >
-                  Update Password
+                  {resetTeacherLoading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Updating...</span>
+                    </>
+                  ) : (
+                    <span>Update Password</span>
+                  )}
                 </button>
               </div>
             </form>

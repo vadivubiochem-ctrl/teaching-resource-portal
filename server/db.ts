@@ -128,6 +128,21 @@ function getInitialDatabase(): DatabaseSchema {
       storage_limit: 16106127360,
       created_at: '2026-03-06T09:00:00.000Z',
     },
+    {
+      id: 'usr_ramamoorthy',
+      schoolId: 'SCH_PANNAIPURAM',
+      school_name: 'Govt Hr Sec School Pannaipuram',
+      school_code: 'STATE-405',
+      username: 'Ramamoorthy',
+      email: 'moorthyagri84@gmail.com',
+      password_hash: bcrypt.hashSync('admin123', salt),
+      role: 'teacher',
+      status: 'active',
+      department: 'Agricultural Science & Biology',
+      storage_used: 0,
+      storage_limit: 16106127360,
+      created_at: '2026-03-01T08:00:00.000Z',
+    },
   ];
 
   const defaultFolders: Folder[] = [

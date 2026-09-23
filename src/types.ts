@@ -44,6 +44,7 @@ export interface User {
   storage_limit: number; // in bytes
   created_at: string;
   permissions?: TeacherPermissions;
+  password?: string;
 }
 
 export type FileCategory = 'video' | 'audio' | 'document' | 'image' | 'other';
