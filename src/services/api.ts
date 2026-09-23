@@ -19,6 +19,7 @@ import {
 } from './store.js';
 import { recordFileAccess } from './offlineStorage.js';
 import { onlineDb, fileToBase64 } from './firebase.js';
+import { syncManager } from '../utils/syncManager.js';
 
 export function getStoredToken(): string | null {
   return LocalStore.getSessionUser()?.id || null;
@@ -1040,6 +1041,32 @@ export const api = {
     return { success: true };
   },
 
+  // Cross-device user synchronization with Firestore
+  async syncUsersWithCloud(schoolIdParam?: string): Promise<void> {
+    const callerSchoolId = validateTenantSchoolScope(schoolIdParam, 'syncUsersWithCloud');
+    try {
+      // 1. Fetch cloud permanently deleted tombstones and purge them locally immediately
+      const deletedTombstones = await onlineDb.getDeletedUsers();
+      if (deletedTombstones && deletedTombstones.length > 0) {
+        LocalStore.syncCloudDeletedUsers(deletedTombstones);
+      }
+
+      // 2. Fetch cloud users from Firestore
+      const cloudUsers = await onlineDb.getUsers(callerSchoolId);
+      if (cloudUsers && cloudUsers.length > 0) {
+        LocalStore.syncCloudUsers(cloudUsers);
+      } else {
+        // First-time cloud seed: upload active, non-deleted local users to Firestore
+        const localUsers = LocalStore.getUsers().filter((u) => u.schoolId === callerSchoolId);
+        if (localUsers.length > 0) {
+          onlineDb.saveUsersBatch(localUsers).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn('Cross-device Firestore users sync error:', err);
+    }
+  },
+
   // Stats
   async getStats(schoolIdParam?: string): Promise<SystemStats> {
     const callerSchoolId = validateTenantSchoolScope(schoolIdParam, 'getStats');
@@ -1082,6 +1109,8 @@ export const api = {
   // Admin Dashboard
   async getAdminDashboard(schoolIdParam?: string) {
     const callerSchoolId = validateTenantSchoolScope(schoolIdParam, 'getAdminDashboard');
+    // Ensure latest cloud user roster & deleted tombstones are synchronized across desktop and mobile devices
+    await this.syncUsersWithCloud(callerSchoolId);
     LocalStore.recalculateStorage();
     const users = LocalStore.getUsers().filter((u) => u.schoolId === callerSchoolId);
     const auditLogs = LocalStore.getAuditLogs().filter((l) => l.schoolId === callerSchoolId);
@@ -1217,6 +1246,10 @@ export const api = {
     users[idx] = { ...users[idx], ...userFields };
     LocalStore.saveUsers(users);
 
+    // Sync to Firestore & broadcast
+    onlineDb.saveUser(users[idx]).catch(() => {});
+    syncManager.emit('user-updated', { user: users[idx] });
+
     return { user: users[idx] };
   },
 
@@ -1271,6 +1304,10 @@ export const api = {
     users.push(newUser);
     LocalStore.saveUsers(users);
 
+    // Sync to Firestore & broadcast to other devices
+    onlineDb.saveUser(newUser).catch(() => {});
+    syncManager.emit('user-created', { user: newUser });
+
     const currentUser = LocalStore.getSessionUser();
     LocalStore.addAuditLog({
       schoolId: callerSchoolId,
@@ -1314,8 +1351,19 @@ export const api = {
     // 2. Permanently delete from LocalStore (records in deleted users list, deletes files, folders, credentials)
     const deletedUser = LocalStore.permanentlyDeleteUser(id) || target;
 
-    // 3. Delete from Firebase Firestore onlineDb
-    onlineDb.deleteUser(id).catch(() => {});
+    // 3. Delete from Firebase Firestore onlineDb & write permanent tombstone for cross-device sync
+    const targetEmail = target?.email || deletedUser?.email;
+    const targetUsername = target?.username || deletedUser?.username;
+    onlineDb.deleteUser(id, targetEmail, targetUsername).catch(() => {});
+    onlineDb.recordDeletedUser({
+      id,
+      email: targetEmail,
+      username: targetUsername,
+      deletedAt: new Date().toISOString(),
+    }).catch(() => {});
+
+    // Broadcast user-deleted event across open browser tabs/devices
+    syncManager.emit('user-deleted', { userId: id, email: targetEmail, username: targetUsername });
 
     // 4. Delete from Backend Server REST API & data/db.json
     try {
@@ -1435,6 +1483,8 @@ export const api = {
 
   async getInstitutionalAnalytics(schoolIdParam?: string) {
     const schoolId = validateTenantSchoolScope(schoolIdParam, 'getInstitutionalAnalytics');
+    // Synchronize latest cloud user roster & deleted tombstones
+    await this.syncUsersWithCloud(schoolId);
     const school = LocalStore.getSchoolById(schoolId) || {
       id: schoolId,
       name: 'Govt Hr Sec School Pannaipuram',

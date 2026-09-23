@@ -88,21 +88,6 @@ export const INITIAL_USERS: User[] = [
     created_at: '2026-02-01T09:30:00.000Z',
     permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
   },
-  {
-    id: 'usr_vasisoft',
-    schoolId: 'SCH_PANNAIPURAM',
-    school_name: 'Govt Hr Sec School Pannaipuram',
-    school_code: 'STATE-405',
-    username: 'vasisoft',
-    email: 'vasisoft20815@gmail.com',
-    role: 'teacher',
-    status: 'active',
-    department: 'Mathematics & Advanced Technology',
-    storage_used: 198700000,
-    storage_limit: 16106127360, // 15 GB
-    created_at: '2026-02-20T14:15:00.000Z',
-    permissions: { ...DEFAULT_TEACHER_PERMISSIONS },
-  },
 ];
 
 // LocalStorage key for persistent passwords
@@ -110,12 +95,21 @@ const DB_PASSWORDS_KEY = 'teacherhub_user_passwords_v1';
 // LocalStorage key for permanently deleted user accounts
 export const DB_DELETED_USER_IDS_KEY = 'teacherhub_permanently_deleted_users_v1';
 
+// Default permanent deletion tombstones across all devices and platforms
+export const DEFAULT_DELETED_USER_IDS: string[] = [
+  'usr_vasisoft',
+  'vasisoft',
+  'vasisoft20815@gmail.com',
+  'vasisoft20818@gmail.com',
+];
+
 export function getDeletedUserIds(): string[] {
   try {
     const raw = localStorage.getItem(DB_DELETED_USER_IDS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const parsed: string[] = raw ? JSON.parse(raw) : [];
+    return Array.from(new Set([...DEFAULT_DELETED_USER_IDS, ...parsed]));
   } catch {
-    return [];
+    return [...DEFAULT_DELETED_USER_IDS];
   }
 }
 
@@ -145,7 +139,6 @@ const DEFAULT_PASSWORDS: Record<string, string[]> = {
   usr_pssofttech: ['admin123', 'password123', 'pssofttech', 'pssofttech@gmail.com', 'admin'],
   usr_vadivubichem: ['admin123', 'password123', 'vadivubichem', 'vadivubichem@gmail.com', 'vadivubiochem', 'teacher'],
   usr_emal: ['admin123', 'email password', 'emal', 'password123'],
-  usr_vasisoft: ['admin123', 'password123', 'vasisoft'],
 };
 
 export function getStoredPasswords(): Record<string, string[]> {
@@ -227,16 +220,6 @@ export const INITIAL_FOLDERS: Folder[] = [
     created_at: '2026-02-23T13:10:00.000Z',
     color: '#06b6d4',
     file_count: 4,
-  },
-  {
-    id: 'fld_math_worksheets',
-    schoolId: 'SCH_PANNAIPURAM',
-    user_id: 'usr_vasisoft',
-    parent_folder_id: null,
-    folder_name: 'Calculus & Linear Algebra Worksheets',
-    created_at: '2026-02-21T15:00:00.000Z',
-    color: '#8b5cf6',
-    file_count: 3,
   },
 ];
 
@@ -344,26 +327,6 @@ export const INITIAL_FILES: TeachingFile[] = [
     shared_mode: 'all_teachers',
     owner_name: 'pssofttech',
     owner_email: 'pssofttech@gmail.com',
-  },
-  {
-    id: 'file_06_calculus_worksheet',
-    schoolId: 'SCH_PANNAIPURAM',
-    user_id: 'usr_vasisoft',
-    folder_id: 'fld_math_worksheets',
-    file_name: 'Integral_Calculus_Practice_Set_2026.pdf',
-    file_type: 'document',
-    file_extension: 'pdf',
-    file_size: 5120000,
-    storage_path: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-    device: 'Mobile (Android Phone)',
-    uploaded_at: '2026-03-05T10:15:00.000Z',
-    updated_at: '2026-03-05T10:15:00.000Z',
-    is_favorite: true,
-    is_trashed: false,
-    mime_type: 'application/pdf',
-    shared_mode: 'all_teachers',
-    owner_name: 'vasisoft',
-    owner_email: 'vasisoft20815@gmail.com',
   },
   {
     id: 'file_07_biochem_audio',
@@ -858,6 +821,65 @@ export class LocalStore {
     return target;
   }
 
+  static syncCloudDeletedUsers(deletedList: { id: string; email?: string; username?: string }[]): void {
+    if (!deletedList || deletedList.length === 0) return;
+    for (const item of deletedList) {
+      addDeletedUserId(item.id, item.email, item.username);
+    }
+    const deletedIds = getDeletedUserIds();
+    let users = this.getUsers();
+    const initialLen = users.length;
+    users = users.filter((u) => !isUserDeleted(u.id, u.email, u.username));
+    if (users.length !== initialLen) {
+      this.saveUsers(users);
+      this.recalculateStorage();
+    }
+  }
+
+  static syncCloudUsers(cloudUsers: User[]): void {
+    if (!cloudUsers || cloudUsers.length === 0) return;
+    const deletedIds = getDeletedUserIds();
+    let localUsers = this.getUsers();
+    let modified = false;
+
+    for (const cu of cloudUsers) {
+      if (
+        isUserDeleted(cu.id, cu.email, cu.username) ||
+        deletedIds.includes(cu.id) ||
+        deletedIds.includes((cu.email || '').toLowerCase().trim()) ||
+        deletedIds.includes((cu.username || '').toLowerCase().trim()) ||
+        cu.id === 'usr_vasisoft' ||
+        (cu.email || '').toLowerCase().trim() === 'vasisoft20815@gmail.com' ||
+        (cu.email || '').toLowerCase().trim() === 'vasisoft20818@gmail.com'
+      ) {
+        continue;
+      }
+      const idx = localUsers.findIndex(
+        (lu) => lu.id === cu.id || (lu.email && cu.email && lu.email.toLowerCase().trim() === cu.email.toLowerCase().trim())
+      );
+      if (idx === -1) {
+        localUsers.push(cu);
+        modified = true;
+      } else {
+        localUsers[idx] = { ...localUsers[idx], ...cu };
+        modified = true;
+      }
+    }
+
+    const prevCount = localUsers.length;
+    localUsers = localUsers.filter(
+      (u) =>
+        !isUserDeleted(u.id, u.email, u.username) &&
+        u.id !== 'usr_vasisoft' &&
+        (u.email || '').toLowerCase().trim() !== 'vasisoft20815@gmail.com' &&
+        (u.email || '').toLowerCase().trim() !== 'vasisoft20818@gmail.com'
+    );
+    if (localUsers.length !== prevCount || modified) {
+      this.saveUsers(localUsers);
+      this.recalculateStorage();
+    }
+  }
+
   static recalculateStorage(): void {
     const users = this.getUsers();
     const files = this.getFiles().filter((f) => !f.is_trashed);
@@ -891,6 +913,18 @@ export class LocalStore {
     // Filter out Riverside files
     if (files.some((f) => f.schoolId === 'SCH_RIVERSIDE' || f.id.includes('riverside'))) {
       files = files.filter((f) => f.schoolId !== 'SCH_RIVERSIDE' && !f.id.includes('riverside'));
+      changed = true;
+    }
+
+    // Filter out files owned by permanently deleted users
+    const deletedUserIds = getDeletedUserIds();
+    if (files.some((f) => deletedUserIds.includes(f.user_id) || f.user_id === 'usr_vasisoft' || (f.owner_email && (f.owner_email.toLowerCase().includes('vasisoft20815') || f.owner_email.toLowerCase().includes('vasisoft20818'))))) {
+      files = files.filter(
+        (f) =>
+          !deletedUserIds.includes(f.user_id) &&
+          f.user_id !== 'usr_vasisoft' &&
+          !(f.owner_email && (f.owner_email.toLowerCase().includes('vasisoft20815') || f.owner_email.toLowerCase().includes('vasisoft20818')))
+      );
       changed = true;
     }
 
@@ -933,6 +967,13 @@ export class LocalStore {
       changed = true;
     }
 
+    // Filter out folders owned by permanently deleted users
+    const deletedUserIds = getDeletedUserIds();
+    if (folders.some((fld) => deletedUserIds.includes(fld.user_id) || fld.user_id === 'usr_vasisoft')) {
+      folders = folders.filter((fld) => !deletedUserIds.includes(fld.user_id) && fld.user_id !== 'usr_vasisoft');
+      changed = true;
+    }
+
     // Migration: ensure every folder has schoolId SCH_PANNAIPURAM if SCH_CENTRAL or missing
     for (const fld of folders) {
       if (!fld.schoolId || fld.schoolId === 'SCH_CENTRAL') {
@@ -967,19 +1008,6 @@ export class LocalStore {
           ip: '192.168.1.45',
           timestamp: '2026-03-05T13:45:00.000Z',
           details: 'Uploaded 24.5 MB audio lecture via mobile browser',
-        },
-        {
-          id: 'log_02',
-          schoolId: 'SCH_PANNAIPURAM',
-          user_id: 'usr_vasisoft',
-          username: 'vasisoft',
-          action: 'MOVE_FILE',
-          target_type: 'file',
-          target_name: 'Integral_Calculus_Practice_Set_2026.pdf',
-          device: 'Mobile (Android Phone)',
-          ip: '192.168.1.33',
-          timestamp: '2026-03-05T10:15:00.000Z',
-          details: 'Moved into "Mathematics & Advanced Technology" folder',
         },
         {
           id: 'log_03',

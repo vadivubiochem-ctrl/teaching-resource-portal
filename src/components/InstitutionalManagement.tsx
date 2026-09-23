@@ -28,6 +28,9 @@ import {
 import type { User, School, TeacherPermissions } from '../types.js';
 import { DEFAULT_TEACHER_PERMISSIONS } from '../types.js';
 import { api } from '../services/api.js';
+import { onlineDb } from '../services/firebase.js';
+import { LocalStore } from '../services/store.js';
+import { syncManager } from '../utils/syncManager.js';
 import { formatBytes, formatDate } from '../utils/formatters.js';
 
 interface InstitutionalManagementProps {
@@ -120,6 +123,38 @@ export const InstitutionalManagement: React.FC<InstitutionalManagementProps> = (
 
   useEffect(() => {
     loadData();
+  }, [selectedSchoolId]);
+
+  // Real-time synchronization across devices (Mobile & Desktop)
+  useEffect(() => {
+    // 1. BroadcastChannel / storage event listener across tabs/windows
+    const unsubSync = syncManager.subscribe((msg) => {
+      if (msg.event === 'user-deleted' || msg.event === 'user-created' || msg.event === 'user-updated') {
+        loadData(selectedSchoolId);
+      }
+    });
+
+    // 2. Real-time Firestore listener for deleted user tombstones
+    const unsubDeleted = onlineDb.subscribeDeletedUsers((deletedUsers) => {
+      if (deletedUsers && deletedUsers.length > 0) {
+        LocalStore.syncCloudDeletedUsers(deletedUsers);
+        loadData(selectedSchoolId);
+      }
+    });
+
+    // 3. Real-time Firestore listener for user roster updates
+    const unsubUsers = onlineDb.subscribeUsers((cloudUsers) => {
+      if (cloudUsers && cloudUsers.length > 0) {
+        LocalStore.syncCloudUsers(cloudUsers);
+        loadData(selectedSchoolId);
+      }
+    }, selectedSchoolId);
+
+    return () => {
+      unsubSync();
+      unsubDeleted();
+      unsubUsers();
+    };
   }, [selectedSchoolId]);
 
   // Handle Register New School

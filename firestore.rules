@@ -13,6 +13,9 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if true;
     }
+    match /deletedUsers/{tombstoneId} {
+      allow read, write: if true;
+    }
     match /auditLogs/{logId} {
       allow read, write: if true;
     }

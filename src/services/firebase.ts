@@ -25,6 +25,7 @@ export const COLLECTIONS = {
   USERS: 'users',
   AUDIT_LOGS: 'auditLogs',
   SCHOOLS: 'schools',
+  DELETED_USERS: 'deletedUsers',
 } as const;
 
 /**
@@ -218,10 +219,84 @@ export const onlineDb = {
     }
   },
 
-  async deleteUser(id: string): Promise<void> {
+  async saveUsersBatch(users: User[]): Promise<void> {
+    try {
+      const batch = writeBatch(db);
+      for (const u of users) {
+        const uRef = doc(db, COLLECTIONS.USERS, u.id);
+        const cleanData = Object.fromEntries(
+          Object.entries(u).filter(([_, v]) => v !== undefined)
+        );
+        batch.set(uRef, cleanData, { merge: true });
+      }
+      await batch.commit();
+    } catch (err) {
+      console.warn('Firestore saveUsersBatch error:', err);
+    }
+  },
+
+  // Record a permanently deleted user in Firestore so all other devices (mobile/desktop) purge it immediately
+  async recordDeletedUser(tombstone: { id: string; email?: string; username?: string; deletedAt?: string }): Promise<void> {
+    try {
+      const tombRef = doc(db, COLLECTIONS.DELETED_USERS, tombstone.id);
+      await setDoc(
+        tombRef,
+        {
+          id: tombstone.id,
+          email: (tombstone.email || '').toLowerCase().trim(),
+          username: (tombstone.username || '').toLowerCase().trim(),
+          deletedAt: tombstone.deletedAt || new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      console.warn('Firestore recordDeletedUser error:', err);
+    }
+  },
+
+  async getDeletedUsers(): Promise<{ id: string; email?: string; username?: string; deletedAt?: string }[]> {
+    try {
+      const colRef = collection(db, COLLECTIONS.DELETED_USERS);
+      const snapshot = await getDocs(colRef);
+      const list: { id: string; email?: string; username?: string; deletedAt?: string }[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as any);
+      });
+      return list;
+    } catch (err) {
+      console.warn('Firestore getDeletedUsers error:', err);
+      return [];
+    }
+  },
+
+  subscribeDeletedUsers(onUpdate: (deletedUsers: { id: string; email?: string; username?: string }[]) => void): () => void {
+    try {
+      const colRef = collection(db, COLLECTIONS.DELETED_USERS);
+      return onSnapshot(
+        colRef,
+        (snapshot) => {
+          const list: { id: string; email?: string; username?: string }[] = [];
+          snapshot.forEach((docSnap) => {
+            list.push(docSnap.data() as any);
+          });
+          onUpdate(list);
+        },
+        (error) => {
+          console.warn('Firestore deletedUsers subscription error:', error);
+        }
+      );
+    } catch (err) {
+      console.warn('Firestore subscribeDeletedUsers error:', err);
+      return () => {};
+    }
+  },
+
+  async deleteUser(id: string, email?: string, username?: string): Promise<void> {
     try {
       const userRef = doc(db, COLLECTIONS.USERS, id);
       await deleteDoc(userRef);
+      // Automatically record tombstone in deletedUsers collection in Firestore
+      await this.recordDeletedUser({ id, email, username });
     } catch (err) {
       console.warn('Firestore deleteUser error:', err);
     }
@@ -240,6 +315,29 @@ export const onlineDb = {
     } catch (err) {
       console.warn('Firestore getUsers error:', err);
       return [];
+    }
+  },
+
+  subscribeUsers(onUpdate: (users: User[]) => void, schoolId?: string): () => void {
+    try {
+      const colRef = collection(db, COLLECTIONS.USERS);
+      const q = schoolId ? query(colRef, where('schoolId', '==', schoolId)) : colRef;
+      return onSnapshot(
+        q,
+        (snapshot) => {
+          const users: User[] = [];
+          snapshot.forEach((docSnap) => {
+            users.push(docSnap.data() as User);
+          });
+          onUpdate(users);
+        },
+        (error) => {
+          console.warn('Firestore users subscription error:', error);
+        }
+      );
+    } catch (err) {
+      console.warn('Firestore subscribeUsers error:', err);
+      return () => {};
     }
   },
 

@@ -1,4 +1,10 @@
-export type SyncEvent = 'file-updated' | 'file-uploaded' | 'file-deleted';
+export type SyncEvent =
+  | 'file-updated'
+  | 'file-uploaded'
+  | 'file-deleted'
+  | 'user-updated'
+  | 'user-deleted'
+  | 'user-created';
 
 export interface SyncBroadcastMessage {
   event: SyncEvent;

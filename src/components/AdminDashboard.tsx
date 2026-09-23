@@ -46,6 +46,8 @@ import { LocalStore } from '../services/store.js';
 import { formatBytes, formatDate, formatDateTime } from '../utils/formatters.js';
 import { ADMIN_RULES, MULTI_USER_RULES } from '../services/institutionalRules.js';
 import { InstitutionalManagement } from './InstitutionalManagement.js';
+import { onlineDb } from '../services/firebase.js';
+import { syncManager } from '../utils/syncManager.js';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -152,6 +154,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   useEffect(() => {
     fetchAdminData();
+  }, []);
+
+  // Real-time synchronization across devices (Mobile & Desktop)
+  useEffect(() => {
+    const unsubSync = syncManager.subscribe((msg) => {
+      if (msg.event === 'user-deleted' || msg.event === 'user-created' || msg.event === 'user-updated') {
+        fetchAdminData();
+      }
+    });
+
+    const unsubDeleted = onlineDb.subscribeDeletedUsers((deletedUsers) => {
+      if (deletedUsers && deletedUsers.length > 0) {
+        LocalStore.syncCloudDeletedUsers(deletedUsers);
+        fetchAdminData();
+      }
+    });
+
+    const unsubUsers = onlineDb.subscribeUsers((cloudUsers) => {
+      if (cloudUsers && cloudUsers.length > 0) {
+        LocalStore.syncCloudUsers(cloudUsers);
+        fetchAdminData();
+      }
+    });
+
+    return () => {
+      unsubSync();
+      unsubDeleted();
+      unsubUsers();
+    };
   }, []);
 
   // Handler: Create User

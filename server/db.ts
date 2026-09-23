@@ -108,21 +108,6 @@ function getInitialDatabase(): DatabaseSchema {
       created_at: '2026-02-15T11:00:00.000Z',
     },
     {
-      id: 'usr_vasisoft',
-      schoolId: 'SCH_PANNAIPURAM',
-      school_name: 'Govt Hr Sec School Pannaipuram',
-      school_code: 'STATE-405',
-      username: 'vasisoft20815',
-      email: 'vasisoft20815@gmail.com',
-      password_hash: bcrypt.hashSync('password123', salt),
-      role: 'teacher',
-      status: 'active',
-      department: 'Mathematics & Technology',
-      storage_used: 180 * 1024 * 1024,
-      storage_limit: 15 * 1024 * 1024 * 1024,
-      created_at: '2026-03-01T14:15:00.000Z',
-    },
-    {
       id: 'usr_vadivubichem',
       schoolId: 'SCH_PANNAIPURAM',
       school_name: 'Govt Hr Sec School Pannaipuram',
@@ -259,14 +244,6 @@ function getInitialDatabase(): DatabaseSchema {
       color: '#059669',
       created_at: '2026-03-04T11:00:00.000Z',
     },
-    {
-      id: 'fld_model_qp',
-      user_id: 'usr_vasisoft',
-      parent_folder_id: null,
-      folder_name: 'Model Question Papers',
-      color: '#6366F1',
-      created_at: '2026-03-04T11:30:00.000Z',
-    },
   ];
 
   // Helper to create small sample test files on disk if not present
@@ -381,25 +358,6 @@ function getInitialDatabase(): DatabaseSchema {
       owner_email: 'vadivubichem@gmail.com',
     },
     {
-      id: 'fil_math_model_qp',
-      user_id: 'usr_vasisoft',
-      folder_id: 'fld_model_qp',
-      file_name: 'Calculus_Model_Question_Paper_2026.docx',
-      file_type: 'document',
-      file_extension: 'docx',
-      file_size: 1800000,
-      storage_path: 'sample_lesson_notes.txt',
-      device: 'Mobile (Android Phone)',
-      uploaded_at: '2026-09-04T18:25:00.000Z',
-      updated_at: '2026-09-04T18:25:00.000Z',
-      is_favorite: false,
-      is_trashed: false,
-      mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      shared_mode: 'all_teachers',
-      owner_name: 'vasisoft20815',
-      owner_email: 'vasisoft20815@gmail.com',
-    },
-    {
       id: 'fil_emal_chem_audio',
       user_id: 'usr_emal',
       folder_id: null,
@@ -488,16 +446,6 @@ function getInitialDatabase(): DatabaseSchema {
       created_at: '2026-09-04T17:00:00.000Z',
       user_email: 'pssofttech@gmail.com',
       user_name: 'pssofttech',
-    },
-    {
-      id: 'shr_2',
-      file_id: 'fil_lesson5_video',
-      owner_id: 'usr_pssofttech',
-      shared_user_id: 'usr_vasisoft',
-      permission: 'view',
-      created_at: '2026-09-05T15:00:00.000Z',
-      user_email: 'vasisoft20815@gmail.com',
-      user_name: 'vasisoft20815',
     },
   ];
 
@@ -611,6 +559,29 @@ class Database {
             u.school_code !== 'RIVER-202' &&
             !u.email.includes('riverside.edu')
         );
+
+        // Filter out permanently deleted user accounts across all devices
+        parsed.users = parsed.users.filter(
+          (u) =>
+            u.id !== 'usr_vasisoft' &&
+            !u.email.toLowerCase().includes('vasisoft20815') &&
+            !u.email.toLowerCase().includes('vasisoft20818') &&
+            !u.username.toLowerCase().includes('vasisoft')
+        );
+        parsed.files = parsed.files.filter(
+          (f) =>
+            f.user_id !== 'usr_vasisoft' &&
+            !(f.owner_email && (f.owner_email.toLowerCase().includes('vasisoft20815') || f.owner_email.toLowerCase().includes('vasisoft20818')))
+        );
+        parsed.folders = parsed.folders.filter((fld) => fld.user_id !== 'usr_vasisoft');
+        if (parsed.sharing) {
+          parsed.sharing = parsed.sharing.filter(
+            (s) =>
+              s.shared_user_id !== 'usr_vasisoft' &&
+              s.owner_id !== 'usr_vasisoft' &&
+              !(s.user_email && (s.user_email.toLowerCase().includes('vasisoft20815') || s.user_email.toLowerCase().includes('vasisoft20818')))
+          );
+        }
 
         // Backfill and migrate schoolId on legacy users
         parsed.users.forEach((u) => {

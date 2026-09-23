@@ -163,7 +163,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Listen for 'file-updated' BroadcastChannel events across all open browser windows/tabs
+  // Listen for sync events across all open browser windows/tabs
   useEffect(() => {
     const unsubscribe = syncManager.subscribe((msg) => {
       console.log('[syncManager] Received event from another window/tab:', msg.event);
@@ -195,9 +195,28 @@ export default function App() {
         loadRepositoryData();
       }
     });
+    const unsubDeleted = onlineDb.subscribeDeletedUsers((deletedUsers) => {
+      if (deletedUsers && deletedUsers.length > 0) {
+        console.log('[Firestore] Real-time deleted users sync from cloud');
+        LocalStore.syncCloudDeletedUsers(deletedUsers);
+        setLastSyncTime(new Date());
+        loadRepositoryData();
+      }
+    });
+    const unsubUsers = onlineDb.subscribeUsers((cloudUsers) => {
+      if (cloudUsers && cloudUsers.length > 0) {
+        console.log('[Firestore] Real-time users roster sync from cloud');
+        LocalStore.syncCloudUsers(cloudUsers);
+        setLastSyncTime(new Date());
+        loadRepositoryData();
+      }
+    }, currentUser.schoolId);
+
     return () => {
       unsubFiles();
       unsubFolders();
+      unsubDeleted();
+      unsubUsers();
     };
   }, [currentUser, loadRepositoryData]);
 

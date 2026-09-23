@@ -46,21 +46,6 @@
       "school_code": "STATE-405"
     },
     {
-      "id": "usr_vasisoft",
-      "username": "vasisoft20815",
-      "email": "vasisoft20815@gmail.com",
-      "password_hash": "$2b$10$1QdHDIUkq86zgYrTnBCEEuMiRrM9c2pbh5pmIwOYN5SJK8lAO.44y",
-      "role": "teacher",
-      "status": "active",
-      "department": "Mathematics & Technology",
-      "storage_used": 188743680,
-      "storage_limit": 16106127360,
-      "created_at": "2026-03-01T14:15:00.000Z",
-      "schoolId": "SCH_PANNAIPURAM",
-      "school_name": "Govt Hr Sec School Pannaipuram",
-      "school_code": "STATE-405"
-    },
-    {
       "id": "usr_vadivubichem",
       "username": "vadivubichem",
       "email": "vadivubichem@gmail.com",
@@ -193,26 +178,6 @@
       "shared_mode": "all_teachers",
       "owner_name": "vadivubichem",
       "owner_email": "vadivubichem@gmail.com",
-      "schoolId": "SCH_PANNAIPURAM"
-    },
-    {
-      "id": "fil_math_model_qp",
-      "user_id": "usr_vasisoft",
-      "folder_id": "fld_model_qp",
-      "file_name": "Calculus_Model_Question_Paper_2026.docx",
-      "file_type": "document",
-      "file_extension": "docx",
-      "file_size": 1800000,
-      "storage_path": "sample_lesson_notes.txt",
-      "device": "Mobile (Android Phone)",
-      "uploaded_at": "2026-09-04T18:25:00.000Z",
-      "updated_at": "2026-09-04T18:25:00.000Z",
-      "is_favorite": false,
-      "is_trashed": false,
-      "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "shared_mode": "all_teachers",
-      "owner_name": "vasisoft20815",
-      "owner_email": "vasisoft20815@gmail.com",
       "schoolId": "SCH_PANNAIPURAM"
     },
     {
@@ -414,15 +379,6 @@
       "color": "#059669",
       "created_at": "2026-03-04T11:00:00.000Z",
       "schoolId": "SCH_PANNAIPURAM"
-    },
-    {
-      "id": "fld_model_qp",
-      "user_id": "usr_vasisoft",
-      "parent_folder_id": null,
-      "folder_name": "Model Question Papers",
-      "color": "#6366F1",
-      "created_at": "2026-03-04T11:30:00.000Z",
-      "schoolId": "SCH_PANNAIPURAM"
     }
   ],
   "sharing": [
@@ -435,16 +391,6 @@
       "created_at": "2026-09-04T17:00:00.000Z",
       "user_email": "pssofttech@gmail.com",
       "user_name": "pssofttech"
-    },
-    {
-      "id": "shr_2",
-      "file_id": "fil_lesson5_video",
-      "owner_id": "usr_pssofttech",
-      "shared_user_id": "usr_vasisoft",
-      "permission": "view",
-      "created_at": "2026-09-05T15:00:00.000Z",
-      "user_email": "vasisoft20815@gmail.com",
-      "user_name": "vasisoft20815"
     }
   ],
   "auditLogs": [

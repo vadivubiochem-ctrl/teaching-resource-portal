@@ -97,6 +97,19 @@
         "details": { "type": "string" }
       },
       "required": ["id", "action", "timestamp"]
+    },
+    "DeletedUser": {
+      "title": "DeletedUser",
+      "description": "Tombstone record of a deleted user account to propagate deletions across all devices",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "username": { "type": "string" },
+        "deletedAt": { "type": "string" }
+      },
+      "required": ["id", "deletedAt"]
     }
   },
   "firestore": {
@@ -115,6 +128,10 @@
     "/users/{userId}": {
       "schema": "User",
       "description": "User profile state and storage quotas"
+    },
+    "/deletedUsers/{tombstoneId}": {
+      "schema": "DeletedUser",
+      "description": "Tombstone records of permanently deleted users synchronized across all devices"
     },
     "/auditLogs/{logId}": {
       "schema": "AuditLog",

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Share2, X, Lock, Globe, Shield, Users, UserCheck, Check } from 'lucide-react';
 import type { TeachingFile } from '../types.js';
+import { LocalStore } from '../services/store.js';
 
 interface ShareModalProps {
   file: TeachingFile | null;
@@ -8,18 +9,20 @@ interface ShareModalProps {
   onSaveShare: (fileId: string, sharedUserId?: string, permission?: 'view' | 'edit', sharedMode?: string) => Promise<void>;
 }
 
-const AVAILABLE_TEACHERS = [
-  { id: 'usr_pssofttech', name: 'pssofttech', email: 'pssofttech@gmail.com', dept: 'Computer Science' },
-  { id: 'usr_vasisoft', name: 'vasisoft20815', email: 'vasisoft20815@gmail.com', dept: 'Mathematics' },
-  { id: 'usr_vadivubichem', name: 'vadivubichem', email: 'vadivubichem@gmail.com', dept: 'Biochemistry' },
-  { id: 'usr_emal', name: 'emal', email: 'emal@teacherhub.edu', dept: 'Science' },
-];
-
 export const ShareModal: React.FC<ShareModalProps> = ({ file, onClose, onSaveShare }) => {
+  const activeTeachers = LocalStore.getUsers()
+    .filter((u) => u.status === 'active' && u.schoolId === (file?.schoolId || 'SCH_PANNAIPURAM'))
+    .map((u) => ({
+      id: u.id,
+      name: u.username,
+      email: u.email,
+      dept: u.department || 'Faculty',
+    }));
+
   const [mode, setMode] = useState<'private' | 'shared_users' | 'all_teachers' | 'admin_only'>(
     file?.shared_mode || 'private'
   );
-  const [selectedTeacherId, setSelectedTeacherId] = useState(AVAILABLE_TEACHERS[0].id);
+  const [selectedTeacherId, setSelectedTeacherId] = useState(activeTeachers[0]?.id || '');
   const [permission, setPermission] = useState<'view' | 'edit'>('view');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -162,7 +165,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ file, onClose, onSaveSha
                   onChange={(e) => setSelectedTeacherId(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
                 >
-                  {AVAILABLE_TEACHERS.map((t) => (
+                  {activeTeachers.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.name} ({t.email}) - {t.dept}
                     </option>
